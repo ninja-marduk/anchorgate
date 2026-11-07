@@ -1,0 +1,120 @@
+"""Render results as Markdown and JSON."""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Sequence
+from datetime import datetime, timezone
+from pathlib import Path
+
+import pandas as pd
+
+from . import __version__
+from .data import Benchmark
+from .declaration import Declaration
+from .result import Result
+
+
+def _table(frame: pd.DataFrame, floatfmt: str = "{:.3f}", max_rows: int = 60) -> str:
+    if frame.empty:
+        return "_(empty)_\n"
+    df = frame.head(max_rows).copy()
+    for c in df.columns:
+        if pd.api.types.is_float_dtype(df[c]):
+            df[c] = df[c].map(lambda v: "" if pd.isna(v) else floatfmt.format(v))
+    cols = [str(c) for c in df.columns]
+    lines = ["| " + " | ".join(cols) + " |", "| " + " | ".join("---" for _ in cols) + " |"]
+    for _, row in df.iterrows():
+        lines.append("| " + " | ".join("" if pd.isna(v) else str(v) for v in row.tolist()) + " |")
+    if len(frame) > max_rows:
+        lines.append(f"\n_{len(frame) - max_rows} more rows in the JSON report_")
+    return "\n".join(lines) + "\n"
+
+
+def render_markdown(
+    results: Sequence[Result],
+    benchmark: Benchmark | None = None,
+    declaration: Declaration | None = None,
+) -> str:
+    """Verdict table first, then each component's numbers."""
+    out = ["# anchorgate report", ""]
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    out.append(f"Generated {stamp} with anchorgate {__version__}.")
+    if declaration is not None:
+        tag = (
+            "pre-registered file" if declaration.preregistered else "in-memory, not pre-registered"
+        )
+        out.append(f"Declaration: `{declaration.name}`, SHA-256 `{declaration.sha256}` ({tag}).")
+    if benchmark is not None:
+        f = benchmark.reference
+        o = benchmark.observations
+        out.append(
+            f"Benchmark: {len(benchmark.forecasts)} forecasts, {f.n_origin} origins,"
+            f" leads {f.lead.min()}..{f.lead.max()}, {f.n_cell} cells;"
+            f" observations {o.n_time} steps, training cutoff index {o.cutoff}."
+        )
+        if benchmark.notes:
+            out.append("")
+            out.append("Validation notes:")
+            out.extend(f"- {n}" for n in benchmark.notes)
+    out.extend(["", "## Verdicts", ""])
+    out.append(
+        _table(
+            pd.DataFrame(
+                [
+                    {"component": r.component, "verdict": r.verdict.value, "rule": r.rule}
+                    for r in results
+                ]
+            )
+        )
+    )
+    for r in results:
+        out.extend(
+            [
+                "",
+                f"## {r.component}: {r.title}",
+                "",
+                f"Verdict: **{r.verdict.value}**. Rule: {r.rule}",
+                "",
+            ]
+        )
+        if r.notes:
+            out.extend(f"- {n}" for n in r.notes)
+            out.append("")
+        out.append(_table(r.values))
+        for name, t in r.tables.items():
+            out.extend(["", f"### {name}", "", _table(t)])
+        if r.inputs:
+            out.extend(["", "Inputs (SHA-256):", ""])
+            out.extend(f"- {k}: `{v[:16]}`" for k, v in r.inputs.items())
+    return "\n".join(out) + "\n"
+
+
+def to_json(results: Sequence[Result], declaration: Declaration | None = None) -> str:
+    doc = {
+        "anchorgate": __version__,
+        "declaration": None
+        if declaration is None
+        else {
+            "name": declaration.name,
+            "sha256": declaration.sha256,
+            "preregistered": declaration.preregistered,
+        },
+        "results": [r.to_dict() for r in results],
+    }
+    return json.dumps(doc, indent=2, default=str)
+
+
+def write_report(
+    directory: str | Path,
+    results: Sequence[Result],
+    benchmark: Benchmark | None = None,
+    declaration: Declaration | None = None,
+) -> tuple[Path, Path]:
+    d = Path(directory)
+    d.mkdir(parents=True, exist_ok=True)
+    md = d / "report.md"
+    js = d / "report.json"
+    md.write_text(render_markdown(results, benchmark, declaration), encoding="utf-8")
+    js.write_text(to_json(results, declaration), encoding="utf-8")
+    return md, js

@@ -1,0 +1,226 @@
+"""Component 1: anchor every forecast to untrained references, and gate.
+
+Every forecast and every reference is scored on identical targets. The gate passes a
+configuration only when the mean over its seeds of the skill score against the
+reference is positive; a configuration with fewer seeds than the declaration asks for
+is reported but cannot pass.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+import numpy as np
+import pandas as pd
+
+from ._time import period_of_year
+from .data import Benchmark, Forecast
+from .declaration import Declaration, Gate
+from .metrics import categorical_scores, score_table, tercile_events
+from .references import build_references, training_terciles
+from .result import Result, Verdict, array_hash
+
+SCORE_COLUMNS = ["pooled_r2", "per_cell_nse", "msess", "rmse", "mae", "bias"]
+
+
+def _select(arr: np.ndarray, origins: np.ndarray, cells: np.ndarray | None) -> np.ndarray:
+    a = arr[origins]
+    return a if cells is None else a[..., cells]
+
+
+def anchor(
+    benchmark: Benchmark,
+    declaration: Declaration | None = None,
+    *,
+    score_origins: Sequence[int] | np.ndarray | None = None,
+    references: Sequence[str] | None = None,
+    gate: Gate | None = None,
+    mask: np.ndarray | str | None = None,
+    by_lead: bool = True,
+    categorical: bool = False,
+    validate: bool = True,
+) -> Result:
+    """Score forecasts and references on the same targets and apply the gate.
+
+    Explicit keyword arguments override the declaration. ``score_origins`` defaults to
+    the declaration's scoring block, or to every origin.
+    """
+    if validate:
+        benchmark.validate()
+    decl = declaration
+    n, horizon = benchmark.n_origin, benchmark.horizon
+    if score_origins is None:
+        origins = decl.score_origins(n, horizon) if decl else np.arange(n)
+    else:
+        origins = np.asarray(sorted(int(o) for o in score_origins), dtype=int)
+    if origins.size == 0 or origins.min() < 0 or origins.max() >= n:
+        raise ValueError(f"scored origins must lie in 0..{n - 1}")
+    ref_names = (
+        tuple(references)
+        if references is not None
+        else (decl.references if decl else ("climatology", "persistence", "seasonal_naive"))
+    )
+    g = gate or (decl.gate if decl else Gate())
+    if g.reference not in ref_names:
+        ref_names = (*ref_names, g.reference)
+    cells = benchmark.cell_mask(mask)
+    obs = benchmark.observations
+    refs = build_references(obs, benchmark.origin_period, benchmark.lead, ref_names)
+    target = _select(benchmark.target, origins, cells)
+    gate_ref = _select(refs[g.reference], origins, cells)
+
+    rows: list[dict[str, object]] = []
+    lead_rows: list[dict[str, object]] = []
+    cat_rows: list[dict[str, object]] = []
+    inputs: dict[str, str] = {"observations": array_hash(obs.series)}
+    lo = np.empty(0)
+    hi = np.empty(0)
+    obs_ev: dict[str, np.ndarray] = {}
+    if categorical:
+        lo_t, hi_t = training_terciles(obs)
+        cal = period_of_year(benchmark.reference.target_period[origins]) - 1
+        lo, hi = lo_t[cal], hi_t[cal]
+        if cells is not None:
+            lo, hi = lo[..., cells], hi[..., cells]
+        obs_ev = tercile_events(target, lo, hi)
+
+    def score_one(
+        name: str, kind: str, pred: np.ndarray, model: str, features: str, seed: int | None
+    ) -> None:
+        row: dict[str, object] = {
+            "kind": kind,
+            "model": model,
+            "features": features,
+            "seed": seed,
+            "label": name,
+            "n_origins": int(origins.size),
+            "n_cells": int(target.shape[-1]),
+        }
+        row.update(score_table(pred, target, gate_ref))
+        rows.append(row)
+        if by_lead:
+            for j, lead in enumerate(benchmark.lead.tolist()):
+                lr: dict[str, object] = {
+                    "label": name,
+                    "kind": kind,
+                    "model": model,
+                    "features": features,
+                    "seed": seed,
+                    "lead": int(lead),
+                }
+                lr.update(score_table(pred[:, j], target[:, j], gate_ref[:, j]))
+                lead_rows.append(lr)
+        if categorical:
+            ev = tercile_events(pred, lo, hi)
+            for event in ("dry", "wet"):
+                cr: dict[str, object] = {
+                    "label": name,
+                    "kind": kind,
+                    "model": model,
+                    "features": features,
+                    "seed": seed,
+                    "event": event,
+                }
+                cr.update(categorical_scores(ev[event], obs_ev[event]))
+                cat_rows.append(cr)
+
+    for name in ref_names:
+        score_one(name, "reference", _select(refs[name], origins, cells), name, "", None)
+    for f in benchmark.forecasts:
+        inputs[f.label] = f.hash()
+        score_one(f.label, "forecast", _select(f.pred, origins, cells), f.model, f.features, f.seed)
+
+    values = pd.DataFrame(rows)
+    per_config = _aggregate(values[values["kind"] == "forecast"], g)
+    verdicts = per_config["verdict"].tolist() if len(per_config) else []
+    if any(v == Verdict.PASS.value for v in verdicts):
+        verdict = Verdict.PASS
+    elif any(v == Verdict.FAIL.value for v in verdicts):
+        verdict = Verdict.FAIL
+    else:
+        verdict = Verdict.INSUFFICIENT
+    notes = []
+    ref_row = values[(values["kind"] == "reference") & (values["label"] == g.reference)].iloc[0]
+    notes.append(
+        f"{g.reference}: pooled R2 {ref_row['pooled_r2']:.3f},"
+        f" per-cell NSE {ref_row['per_cell_nse']:.3f} on {int(origins.size)} origins"
+    )
+    for _, r in per_config.iterrows():
+        notes.append(
+            f"{r['model']}[{r['features']}]: {r['verdict']} (seed mean {g.metric}"
+            f" {r[g.metric + '_mean']:+.3f}, n_seeds {int(r['n_seeds'])})"
+        )
+    tables = {"by_configuration": per_config}
+    if by_lead:
+        tables["by_lead"] = pd.DataFrame(lead_rows)
+    if categorical:
+        tables["categorical"] = pd.DataFrame(cat_rows)
+    return Result(
+        component="C1 anchoring",
+        title=f"Anchoring to {', '.join(ref_names)} on {int(origins.size)} origins",
+        values=values,
+        verdict=verdict,
+        rule=(
+            f"A configuration passes when the mean over at least {g.min_seeds} seeds of {g.metric}"
+            f" against {g.reference} exceeds {g.threshold:g}; fewer seeds cannot pass."
+        ),
+        inputs=inputs,
+        notes=notes,
+        tables=tables,
+        declaration_hash=decl.sha256 if decl else None,
+    )
+
+
+def _aggregate(forecast_rows: pd.DataFrame, g: Gate) -> pd.DataFrame:
+    """Seed mean and spread per configuration, and the gate verdict."""
+    cols = ["model", "features"]
+    out = []
+    if forecast_rows.empty:
+        return pd.DataFrame(
+            columns=[
+                *cols,
+                "n_seeds",
+                *(f"{c}_mean" for c in SCORE_COLUMNS),
+                *(f"{c}_sd" for c in SCORE_COLUMNS),
+                "verdict",
+            ]
+        )
+    for (model, features), grp in forecast_rows.groupby(cols, sort=False):
+        labelled = grp[grp["seed"].notna()]
+        # distinct labelled seeds, plus one per unlabelled run (which cannot be told apart)
+        n_seeds = int(labelled["seed"].nunique()) + int(grp["seed"].isna().sum())
+        rec: dict[str, object] = {
+            "model": model,
+            "features": features,
+            "n_seeds": n_seeds,
+            "n_runs": len(grp),
+        }
+        means: dict[str, float] = {}
+        for c in SCORE_COLUMNS:
+            vals = grp[c].to_numpy(dtype=float)
+            means[c] = float(np.nanmean(vals)) if vals.size else float("nan")
+            rec[f"{c}_mean"] = means[c]
+            rec[f"{c}_sd"] = float(np.nanstd(vals, ddof=1)) if vals.size > 1 else np.nan
+        stat = means.get(g.metric, float("nan"))
+        if n_seeds < g.min_seeds:
+            rec["verdict"] = Verdict.INSUFFICIENT.value
+        elif np.isfinite(stat) and stat > g.threshold:
+            rec["verdict"] = Verdict.PASS.value
+        else:
+            rec["verdict"] = Verdict.FAIL.value
+        out.append(rec)
+    return pd.DataFrame(out)
+
+
+def gate_table(result: Result) -> pd.DataFrame:
+    """The per-configuration verdict table of an anchoring result."""
+    return result.tables["by_configuration"]
+
+
+def quick_anchor(forecast: Forecast, observations: object, **kw: object) -> Result:
+    """Anchor a single forecast (one line for a reader with one model)."""
+    from .data import Observations
+
+    if not isinstance(observations, Observations):
+        raise TypeError("observations must be an Observations instance")
+    return anchor(Benchmark([forecast], observations), **kw)  # type: ignore[arg-type]

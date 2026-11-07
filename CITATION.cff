@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+type: software
+title: "anchorgate: an evaluation protocol with a gate for spatiotemporal predictions"
+version: 0.1.0
+date-released: 2026-11-07
+license: MIT
+repository-code: "https://github.com/ninja-marduk/anchorgate"
+authors:
+  - family-names: "Perez Reyes"
+    given-names: "Manuel Ricardo"
+    orcid: "https://orcid.org/0009-0003-2963-1631"
+    affiliation: "Pedagogical and Technological University of Colombia (UPTC)"
+abstract: >
+  anchorgate scores saved predictions of a spatiotemporal field against untrained references
+  (per-cell climatology, persistence, seasonal naive) on identical targets, audits whether a
+  cross-validation assignment is out of sample given the forecast horizon, resolves seed
+  variance before any architectural claim, and refuses conclusions the computations do not
+  support. Every report carries the hash of a declaration written before scoring.

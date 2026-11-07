@@ -1,0 +1,84 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "anchorgate"
+version = "0.1.0"
+description = "An evaluation protocol with a gate: anchoring, fold auditing and seed-resolved scoring of spatiotemporal predictions"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "Manuel Ricardo Perez Reyes", email = "manuelricardo.perez@uptc.edu.co" },
+]
+keywords = [
+  "forecast verification", "model evaluation", "climatology baseline", "seed variance",
+  "cross-validation leakage", "precipitation", "hydrology", "spatiotemporal prediction",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Atmospheric Science",
+  "Topic :: Scientific/Engineering :: Hydrology",
+]
+dependencies = [
+  "numpy>=1.24",
+  "pandas>=2.0",
+  "scipy>=1.10",
+  "xarray>=2023.1",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+io = ["netCDF4>=1.6"]
+plots = ["matplotlib>=3.7"]
+dev = [
+  "pytest>=7.4",
+  "pytest-cov>=4.1",
+  "ruff>=0.4",
+  "mypy>=1.8",
+  "netCDF4>=1.6",
+  "pandas-stubs",
+  "types-PyYAML",
+]
+
+[project.urls]
+Repository = "https://github.com/ninja-marduk/anchorgate"
+Issues = "https://github.com/ninja-marduk/anchorgate/issues"
+
+[project.scripts]
+anchorgate = "anchorgate.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+anchorgate = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "NPY", "RUF"]
+ignore = ["RUF012"]
+
+[tool.mypy]
+python_version = "3.10"
+packages = ["anchorgate"]
+mypy_path = "src"
+warn_unused_ignores = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
