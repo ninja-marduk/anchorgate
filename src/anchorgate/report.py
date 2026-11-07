@@ -15,7 +15,6 @@ from .data import Benchmark
 from .declaration import Declaration
 from .result import Result
 
-
 INTEGER_COLUMNS = {
     "seed",
     "n_seeds",
