@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from . import __version__
@@ -15,13 +16,33 @@ from .declaration import Declaration
 from .result import Result
 
 
+INTEGER_COLUMNS = {
+    "seed",
+    "n_seeds",
+    "n_runs",
+    "n_origins",
+    "n_cells",
+    "n_fit",
+    "n_score",
+    "n_pairs",
+    "n_overlapping",
+    "n_splits",
+    "split",
+    "lead",
+    "n",
+}
+
+
 def _table(frame: pd.DataFrame, floatfmt: str = "{:.3f}", max_rows: int = 60) -> str:
     if frame.empty:
         return "_(empty)_\n"
     df = frame.head(max_rows).copy()
     for c in df.columns:
         if pd.api.types.is_float_dtype(df[c]):
-            df[c] = df[c].map(lambda v: "" if pd.isna(v) else floatfmt.format(v))
+            finite = df[c].dropna()
+            integral = len(finite) > 0 and bool(np.all(np.mod(finite.to_numpy(), 1) == 0))
+            fmt = "{:.0f}" if integral and str(c) in INTEGER_COLUMNS else floatfmt
+            df[c] = df[c].map(lambda v, fmt=fmt: "" if pd.isna(v) else fmt.format(v))
     cols = [str(c) for c in df.columns]
     lines = ["| " + " | ".join(cols) + " |", "| " + " | ".join("---" for _ in cols) + " |"]
     for _, row in df.iterrows():
