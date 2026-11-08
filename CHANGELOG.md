@@ -18,4 +18,16 @@ Keep a Changelog, and the project follows semantic versioning. The protocol itse
 - Component 1, anchoring: pooled R2, per-cell NSE, MSESS, RMSE, MAE, bias, by lead and
   inside a mask; tercile categorical scores; the gate on the seed mean of MSESS.
 - Declaration file with SHA-256 hash carried into every result.
-- Markdown and JSON reports; command line interface (`validate`, `audit`, `anchor`).
+- Component 2, seed-resolved factorial: responses per run (lead mean, lead peak or
+  pooled), randomised complete block ANOVA with the seed as block, within-block
+  permutation test, paired contrasts with Holm correction over a declared family and
+  Cliff's delta, best-of-seeds inflation, minimum detectable effect, effective units,
+  Friedman and Nemenyi with the critical difference recomputed at the number of
+  disjoint windows; Mann-Whitney group contrasts for tables whose units are not seeds.
+- Component 3, calibration versus combination: out-of-fold affine recalibration and
+  combination on any fold assignment, the best base learner chosen on the fit origins,
+  oracle picks as the selection advantage, the in-sample gap, a supplied ensemble scored
+  for reference, and the ladder of rungs scored on the same origins.
+- Declaration sections `contrasts`, `factorial` and `fusion`.
+- Markdown and JSON reports; command line interface (`validate`, `audit`, `anchor`,
+  `factorial`, `fusion`, `run`).

@@ -1,4 +1,4 @@
-"""Command line interface: ``anchorgate validate | audit | anchor``."""
+"""Command line interface: ``anchorgate validate | audit | anchor | factorial | fusion | run``."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from . import __version__
 from .anchor import anchor
 from .data import Benchmark, benchmark_from_declaration
 from .declaration import Declaration
+from .factorial import factorial
 from .folds import (
     FoldAssignment,
     audit,
@@ -19,6 +20,7 @@ from .folds import (
     released_scalar_shuffle,
     shuffled_kfold,
 )
+from .fusion import decompose_fusion, resolve_assignment
 from .report import write_report
 from .result import Result
 
@@ -99,6 +101,58 @@ def cmd_anchor(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_factorial(args: argparse.Namespace) -> int:
+    decl, bench = _load(args.declaration)
+    res = factorial(bench, decl, mask=args.mask, n_perm=args.n_perm)
+    _finish([res], bench, decl, args.out)
+    return 0
+
+
+def _fusion_assignment(decl: Declaration, bench: Benchmark, name: str) -> FoldAssignment:
+    assignments, _ = _assignments(decl, bench)
+    for a in assignments:
+        if a.name == name:
+            return a
+    block = decl.score_origins(bench.n_origin, bench.horizon).tolist()
+    return resolve_assignment(bench, name, score=block)
+
+
+def cmd_fusion(args: argparse.Namespace) -> int:
+    decl, bench = _load(args.declaration)
+    name = args.assignment or str(decl.fusion.get("assignment", "purged"))
+    res = decompose_fusion(
+        bench, decl, assignment=_fusion_assignment(decl, bench, name), mask=args.mask
+    )
+    _finish([res], bench, decl, args.out)
+    return 0
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    """Every component the declaration supports, one report."""
+    decl, bench = _load(args.declaration)
+    bench.validate()
+    assignments, oos = _assignments(decl, bench)
+    results: list[Result] = [
+        audit(bench, assignments, out_of_sample=oos, declaration_hash=decl.sha256),
+        anchor(bench, decl, mask=args.mask, categorical=args.categorical, validate=False),
+    ]
+    if len(bench.configurations()) >= 2:
+        results.append(factorial(bench, decl, mask=args.mask, validate=False))
+    if decl.fusion:
+        name = str(decl.fusion.get("assignment", "purged"))
+        results.append(
+            decompose_fusion(
+                bench,
+                decl,
+                assignment=_fusion_assignment(decl, bench, name),
+                mask=args.mask,
+                validate=False,
+            )
+        )
+    _finish(results, bench, decl, args.out)
+    return 0 if all(r.verdict.value != "FAIL" for r in results[:1]) else 1
+
+
 def _finish(results: list[Result], bench: Benchmark, decl: Declaration, out: str | None) -> None:
     for r in results:
         print(r.summary())
@@ -131,6 +185,31 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--mask", default=None, help="'domain' to score inside the observations' mask")
     p.add_argument("--categorical", action="store_true", help="add tercile categorical scores")
     p.set_defaults(func=cmd_anchor)
+
+    p = sub.add_parser("factorial", help="component 2: seed-resolved factorial")
+    p.add_argument("declaration")
+    p.add_argument("--out", default=None)
+    p.add_argument("--mask", default=None)
+    p.add_argument("--n-perm", dest="n_perm", type=int, default=20000)
+    p.set_defaults(func=cmd_factorial)
+
+    p = sub.add_parser("fusion", help="component 3: calibration versus combination")
+    p.add_argument("declaration")
+    p.add_argument("--out", default=None)
+    p.add_argument("--mask", default=None)
+    p.add_argument(
+        "--assignment",
+        default=None,
+        help="a fold name from the declaration, or purged | shuffled | contiguous | released",
+    )
+    p.set_defaults(func=cmd_fusion)
+
+    p = sub.add_parser("run", help="every component the declaration supports")
+    p.add_argument("declaration")
+    p.add_argument("--out", default=None)
+    p.add_argument("--mask", default=None)
+    p.add_argument("--categorical", action="store_true")
+    p.set_defaults(func=cmd_run)
 
     args = ap.parse_args(argv)
     return int(args.func(args))

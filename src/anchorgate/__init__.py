@@ -21,6 +21,21 @@ from .data import (
     infer_origin_time,
 )
 from .declaration import Declaration, Gate
+from .factorial import (
+    cliffs_delta,
+    factorial,
+    friedman_nemenyi,
+    group_contrasts,
+    holm,
+    inflation,
+    lead_scores,
+    minimum_detectable_effect,
+    nemenyi_cd,
+    paired_contrasts,
+    permutation_test,
+    rcbd_anova,
+    responses,
+)
 from .folds import (
     FoldAssignment,
     audit,
@@ -33,6 +48,7 @@ from .folds import (
     scalar_shuffle_overlap,
     shuffled_kfold,
 )
+from .fusion import decompose_fusion, fusion_ladder, resolve_assignment
 from .references import build_references, climatology_table, training_terciles
 from .report import render_markdown, to_json, write_report
 from .result import Result, Verdict
@@ -51,19 +67,35 @@ __all__ = [
     "audit",
     "benchmark_from_declaration",
     "build_references",
+    "cliffs_delta",
     "climatology_table",
     "contiguous_kfold",
+    "decompose_fusion",
     "effective_units",
+    "factorial",
     "forecasts_from_directory",
+    "friedman_nemenyi",
     "from_arrays",
+    "fusion_ladder",
     "gate_table",
+    "group_contrasts",
+    "holm",
     "infer_origin_time",
+    "inflation",
     "ladder",
+    "lead_scores",
+    "minimum_detectable_effect",
+    "nemenyi_cd",
     "overlap",
+    "paired_contrasts",
+    "permutation_test",
     "purged_holdout",
     "quick_anchor",
+    "rcbd_anova",
     "released_scalar_shuffle",
     "render_markdown",
+    "resolve_assignment",
+    "responses",
     "scalar_shuffle_overlap",
     "shuffled_kfold",
     "to_json",

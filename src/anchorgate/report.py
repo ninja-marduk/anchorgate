@@ -29,6 +29,14 @@ INTEGER_COLUMNS = {
     "split",
     "lead",
     "n",
+    "df",
+    "n_perm",
+    "wins",
+    "n_a",
+    "n_b",
+    "n_units",
+    "k",
+    "n_effective",
 }
 
 

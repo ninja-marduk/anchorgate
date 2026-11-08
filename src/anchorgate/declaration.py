@@ -37,6 +37,8 @@ class Declaration:
     strata: dict[str, Any] = field(default_factory=dict)
     conclusions: dict[str, str] = field(default_factory=dict)
     folds: list[dict[str, Any]] = field(default_factory=list)
+    factorial: dict[str, Any] = field(default_factory=dict)
+    fusion: dict[str, Any] = field(default_factory=dict)
     raw: bytes = b""
     path: Path | None = None
     preregistered: bool = False
@@ -87,6 +89,8 @@ class Declaration:
             strata=dict(doc.get("strata") or {}),
             conclusions={str(k): str(v) for k, v in (doc.get("conclusions") or {}).items()},
             folds=[dict(f) for f in (doc.get("folds") or [])],
+            factorial=dict(doc.get("factorial") or {}),
+            fusion=dict(doc.get("fusion") or {}),
         )
         d.raw = yaml.safe_dump(doc, sort_keys=True).encode("utf-8")
         return d
