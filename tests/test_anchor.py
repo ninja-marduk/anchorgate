@@ -52,6 +52,10 @@ def test_scoring_block_mask_and_declaration(obs):
     )
     res = anchor(bench, decl, mask="domain")
     assert res.declaration_hash == decl.sha256
+    assert res.deviations == []
+    over = anchor(bench, decl, score_origins=range(0, 5), validate=False)
+    assert any("score_origins" in d for d in over.deviations)
+    assert over.parameters["score_origins"] == [0, 1, 2, 3, 4]
     assert int(res.values["n_origins"].iloc[0]) == 12
     assert int(res.values["n_cells"].iloc[0]) == obs.n_cell // 2
     assert res.verdict == Verdict.PASS

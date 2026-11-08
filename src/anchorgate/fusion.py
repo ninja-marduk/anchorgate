@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 from .data import Benchmark, Forecast
-from .declaration import Declaration
+from .declaration import Declaration, deviations
 from .factorial import HIGHER_IS_BETTER, METRICS, _origins, _select, configuration_label
 from .folds import (
     FoldAssignment,
@@ -159,7 +159,7 @@ def decompose_fusion(
     score_origins: Sequence[int] | np.ndarray | None = None,
     mask: np.ndarray | str | None = None,
     metric: str = "pooled_r2",
-    min_seeds: int = 2,
+    min_seeds: int | None = None,
     k: int = 5,
     seed: int = 42,
     validate: bool = True,
@@ -181,6 +181,7 @@ def decompose_fusion(
         benchmark.validate()
     decl = declaration
     spec = dict(decl.fusion) if decl is not None else {}
+    score_origins_given = score_origins is not None
     if base is None and "base" in spec:
         base = [(str(b["model"]), str(b.get("features", ""))) for b in spec["base"]]
     if ensemble is None and spec.get("ensemble"):
@@ -189,6 +190,9 @@ def decompose_fusion(
     if isinstance(assignment, str) and "assignment" in spec and assignment == "purged":
         assignment = str(spec["assignment"])
     metric = str(spec.get("metric", metric))
+    min_seeds_given = min_seeds is not None
+    if min_seeds is None:
+        min_seeds = decl.gate.min_seeds if decl is not None else 2
     if base is None:
         base = [
             c for c in benchmark.configurations() if ensemble is None or tuple(c) != tuple(ensemble)
@@ -202,6 +206,8 @@ def decompose_fusion(
     ):
         score_origins = decl.score_origins(benchmark.n_origin, benchmark.horizon)
     fa = resolve_assignment(benchmark, assignment, score=score_origins, k=k, seed=seed)
+    # a deviation only when the assignment used differs from the one the declaration names
+    assignment_given = fa.name != str(spec.get("assignment", "purged"))
     higher = HIGHER_IS_BETTER.get(metric, True)
     sign = 1.0 if higher else -1.0
 
@@ -404,6 +410,22 @@ def decompose_fusion(
             ),
         },
         declaration_hash=decl.sha256 if decl else None,
+        parameters={
+            "base": labels,
+            "ensemble": configuration_label(ensemble) if ensemble else None,
+            "assignment": fa.name,
+            "metric": metric,
+            "min_seeds": min_seeds,
+            "score_origins": None if score_origins is None else [int(o) for o in score_origins],
+        },
+        deviations=deviations(
+            decl,
+            {
+                "score_origins": score_origins_given,
+                "assignment": assignment_given,
+                "min_seeds": min_seeds_given,
+            },
+        ),
     )
 
 

@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 
 from .data import Benchmark, Observations
-from .declaration import Declaration
+from .declaration import Declaration, deviations
 from .factorial import _origins, _select, configuration_label
 from .metrics import msess, per_cell_nse, pooled_r2
 from .references import build_references
@@ -455,7 +455,7 @@ def spatial_diagnostics(
     strata: dict[str, np.ndarray] | None = None,
     score_origins: Sequence[int] | np.ndarray | None = None,
     mask: np.ndarray | str | None = None,
-    references: Sequence[str] = ("climatology",),
+    references: Sequence[str] | None = None,
     adjacency: np.ndarray | None = None,
     elevation: np.ndarray | None = None,
     lat: np.ndarray | None = None,
@@ -481,9 +481,13 @@ def spatial_diagnostics(
         )
     else:
         origins = _origins(benchmark, score_origins)
-    share, win, names = winner_map(
-        benchmark, score_origins=origins, mask=mask, references=references
+    references_given = references is not None
+    refs: tuple[str, ...] = (
+        tuple(references)
+        if references is not None
+        else (decl.references if decl is not None else ("climatology",))
     )
+    share, win, names = winner_map(benchmark, score_origins=origins, mask=mask, references=refs)
     cells = benchmark.cell_mask(mask)
     cell_index = np.arange(benchmark.reference.n_cell) if cells is None else np.flatnonzero(cells)
     winner_cells = pd.DataFrame(
@@ -535,9 +539,9 @@ def spatial_diagnostics(
             f" estimate on {100 * lk['disagreement_share']:.2f} % of edges"
         )
 
-    ref_share = share[share["arm"].isin(list(references))]
+    ref_share = share[share["arm"].isin(list(refs))]
     best_ref = float(ref_share["share"].max()) if len(ref_share) else 0.0
-    model_rows = share[~share["arm"].isin(list(references))]
+    model_rows = share[~share["arm"].isin(list(refs))]
     best_model = model_rows.iloc[0] if len(model_rows) else None
     for _, r in share.iterrows():
         notes.append(
@@ -563,6 +567,17 @@ def spatial_diagnostics(
         notes=notes,
         tables=tables,
         declaration_hash=decl.sha256 if decl else None,
+        parameters={
+            "score_origins": origins.tolist(),
+            "references": list(refs),
+            "strata": list((strata or {}).keys()),
+            "collapse_threshold": collapse_threshold,
+            "graph_audit": adjacency is not None,
+            "leakage": leakage,
+        },
+        deviations=deviations(
+            decl, {"score_origins": score_origins is not None, "references": references_given}
+        ),
     )
 
 

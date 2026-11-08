@@ -1,7 +1,12 @@
-"""The declaration: what will be scored, how, and what will be concluded, written first.
+"""The declaration: the design of the evaluation, as a file.
 
-The file is hashed when loaded and the hash is carried into every result, so a report
-whose declaration changed after scoring is visibly a different report.
+It names the data, the scored origins, the references, the gate, the seeds expected per
+configuration, the contrast family, the fold assignments, the strata and what will be
+concluded on PASS and on FAIL. Every component reads its choices from it, records the
+choices it actually used in its ``Result`` and lists any deviation, so a report can be
+read against the design it claims to follow. Two hashes identify it: the file hash (its
+bytes) and the design hash (its sections other than ``data``, in canonical form), so the
+same design on another machine or another dataset carries the same design hash.
 """
 
 from __future__ import annotations
@@ -41,11 +46,34 @@ class Declaration:
     fusion: dict[str, Any] = field(default_factory=dict)
     raw: bytes = b""
     path: Path | None = None
-    preregistered: bool = False
+    source: str = "memory"
 
     @property
     def sha256(self) -> str:
+        """Hash of the loaded bytes (or of the canonical form of an in-memory mapping)."""
         return hashlib.sha256(self.raw).hexdigest()
+
+    @property
+    def design_hash(self) -> str:
+        """Hash of the design alone: every section except ``data``, in canonical YAML."""
+        doc = {
+            "name": self.name,
+            "scoring": self.scoring,
+            "references": list(self.references),
+            "gate": vars(self.gate),
+            "seeds_expected": self.seeds_expected,
+            "contrasts": self.contrasts,
+            "strata": self.strata,
+            "conclusions": self.conclusions,
+            "folds": self.folds,
+            "factorial": self.factorial,
+            "fusion": self.fusion,
+        }
+        return hashlib.sha256(yaml.safe_dump(doc, sort_keys=True).encode("utf-8")).hexdigest()
+
+    @property
+    def short_design_hash(self) -> str:
+        return self.design_hash[:12]
 
     @property
     def short_hash(self) -> str:
@@ -63,13 +91,13 @@ class Declaration:
         d = cls.from_dict(doc)
         d.raw = raw
         d.path = p
-        d.preregistered = True
+        d.source = "file"
         return d
 
     @classmethod
     def from_dict(cls, doc: dict[str, Any]) -> Declaration:
-        """Build from a mapping; hashed on its canonical YAML form, flagged as not
-        pre-registered because nothing proves it was written before scoring."""
+        """Build from a mapping; hashed on its canonical YAML form and marked as coming
+        from memory rather than from a file."""
         gate_doc = dict(doc.get("gate") or {})
         gate = Gate(
             metric=str(gate_doc.get("metric", "msess")),
@@ -120,5 +148,23 @@ class Declaration:
         return np.asarray(sorted(int(o) for o in origins), dtype=int)
 
     def describe(self) -> str:
-        where = str(self.path) if self.path else "(in memory, not pre-registered)"
-        return f"declaration '{self.name}' {self.short_hash} from {where}"
+        where = str(self.path) if self.path else "(in memory)"
+        return (
+            f"declared design '{self.name}' {self.short_design_hash}"
+            f" (file {self.short_hash}) from {where}"
+        )
+
+    def conclusion_for(self, verdict: str) -> str | None:
+        """The declared conclusion for a PASS or FAIL verdict, if one was written."""
+        return self.conclusions.get(verdict.lower())
+
+
+def deviations(declaration: Declaration | None, overridden: dict[str, bool]) -> list[str]:
+    """Names of the declared choices a caller overrode at call time, as sentences."""
+    if declaration is None:
+        return []
+    return [
+        f"{name} was set at call time, not taken from the declaration"
+        for name, flag in overridden.items()
+        if flag
+    ]

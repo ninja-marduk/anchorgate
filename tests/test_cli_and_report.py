@@ -38,10 +38,16 @@ def _write_case(obs, tmp_path: Path) -> Path:
     return p
 
 
-def test_declaration_hash_is_the_file_hash(obs, tmp_path):
+def test_declaration_hashes(obs, tmp_path):
     p = _write_case(obs, tmp_path)
     d = Declaration.load(p)
-    assert d.preregistered and len(d.sha256) == 64
+    assert d.source == "file" and len(d.sha256) == 64 and len(d.design_hash) == 64
+    # the design hash ignores the data section, so moving the files does not change it
+    doc = yaml.safe_load(p.read_text(encoding="utf-8"))
+    doc["data"]["observations"]["path"] = "/elsewhere/obs.nc"
+    moved = Declaration.from_dict(doc)
+    assert moved.design_hash == d.design_hash and moved.sha256 != d.sha256
+    assert moved.source == "memory"
     assert d.score_origins(100, 6).size == 12
     assert d.conclusions["pass"].startswith("the model")
     p.write_text(p.read_text(encoding="utf-8") + "\n# edited after scoring\n", encoding="utf-8")
@@ -57,7 +63,12 @@ def test_cli_validate_audit_anchor(obs, tmp_path, capsys):
     md = (tmp_path / "rep" / "report.md").read_text(encoding="utf-8")
     js = json.loads((tmp_path / "rep" / "report.json").read_text(encoding="utf-8"))
     assert "## Verdicts" in md and "PASS" in md
-    assert js["declaration"]["preregistered"] is True
+    assert js["declaration"]["source"] == "file"
+    assert len(js["declaration"]["design_hash"]) == 64
+    c1 = next(r for r in js["results"] if r["component"].startswith("C1"))
+    assert c1["parameters"]["references"] == ["climatology", "persistence", "seasonal_naive"]
+    assert c1["deviations"] == []
+    assert any("declared conclusion" in n for n in c1["notes"])
     assert js["results"][0]["component"].startswith("C1")
 
 

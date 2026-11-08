@@ -147,7 +147,7 @@ Not a training framework: inputs are saved predictions.
   strength of the climatology and the leakage of ordinary folds outside one case study
   (`pip install "anchorgate[remote]"`).
 - `examples/boyaca_case_study/`: the published monthly precipitation benchmark over the
-  Colombian Andes, run from its deposit through a pre-registered declaration and checked
+  Colombian Andes, run from its deposit through a declared design and checked
   against the published provenance numbers.
 
 Documentation: `mkdocs serve` after `pip install -e ".[docs]"`; the rules page states

@@ -19,7 +19,7 @@ import pandas as pd
 from scipy import stats
 
 from .data import Benchmark
-from .declaration import Declaration
+from .declaration import Declaration, deviations
 from .folds import effective_units
 from .metrics import bias, mae, msess, per_cell_nse, pooled_r2, rmse
 from .references import build_references
@@ -593,6 +593,7 @@ def factorial(
         origins = decl.score_origins(benchmark.n_origin, benchmark.horizon) if decl else None
     else:
         origins = _origins(benchmark, score_origins)
+    family_given = family is not None
     if family is None and decl is not None and decl.contrasts:
         family = [list(c) for c in decl.contrasts]
     higher = HIGHER_IS_BETTER.get(metric, True)
@@ -705,6 +706,23 @@ def factorial(
         verdict = Verdict.PASS
     else:
         verdict = Verdict.FAIL
+    params: dict[str, object] = {
+        "factors": list(factors),
+        "block": block,
+        "metric": metric,
+        "aggregate": aggregate,
+        "n_perm": n_perm,
+        "alpha": alpha,
+        "family": [list(c) for c in family] if family is not None else "all pairs",
+        "score_origins": origin_idx.tolist(),
+    }
+    devs = deviations(
+        decl,
+        {
+            "score_origins": score_origins is not None,
+            "family": family_given,
+        },
+    )
     return Result(
         component="C2 seed-resolved factorial",
         title=f"{' x '.join(factors)} with {block} as block, response {metric} ({aggregate})",
@@ -720,6 +738,8 @@ def factorial(
         notes=notes,
         tables=tables,
         declaration_hash=decl.sha256 if decl else None,
+        parameters=params,
+        deviations=devs,
     )
 
 

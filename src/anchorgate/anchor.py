@@ -15,7 +15,7 @@ import pandas as pd
 
 from ._time import period_of_year
 from .data import Benchmark, Forecast
-from .declaration import Declaration, Gate
+from .declaration import Declaration, Gate, deviations
 from .metrics import categorical_scores, score_table, tercile_events
 from .references import build_references, training_terciles
 from .result import Result, Verdict, array_hash
@@ -155,6 +155,32 @@ def anchor(
         tables["by_lead"] = pd.DataFrame(lead_rows)
     if categorical:
         tables["categorical"] = pd.DataFrame(cat_rows)
+    if decl is not None:
+        if len(per_config):
+            for _, r in per_config[per_config["n_seeds"] < decl.seeds_expected].iterrows():
+                notes.append(
+                    f"{r['model']}[{r['features']}] has {int(r['n_seeds'])} seed(s); the"
+                    f" declaration expected {decl.seeds_expected}"
+                )
+        said = decl.conclusion_for(verdict.value)
+        if said:
+            notes.append(f"declared conclusion on {verdict.value}: {said}")
+    params: dict[str, object] = {
+        "score_origins": origins.tolist(),
+        "references": list(ref_names),
+        "gate": vars(g),
+        "mask": "domain" if isinstance(mask, str) else ("array" if mask is not None else None),
+        "by_lead": by_lead,
+        "categorical": categorical,
+    }
+    devs = deviations(
+        decl,
+        {
+            "score_origins": score_origins is not None,
+            "references": references is not None,
+            "gate": gate is not None,
+        },
+    )
     return Result(
         component="C1 anchoring",
         title=f"Anchoring to {', '.join(ref_names)} on {int(origins.size)} origins",
@@ -168,6 +194,8 @@ def anchor(
         notes=notes,
         tables=tables,
         declaration_hash=decl.sha256 if decl else None,
+        parameters=params,
+        deviations=devs,
     )
 
 

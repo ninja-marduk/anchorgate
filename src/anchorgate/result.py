@@ -38,6 +38,8 @@ class Result:
     notes: list[str] = field(default_factory=list)
     tables: dict[str, pd.DataFrame] = field(default_factory=dict)
     declaration_hash: str | None = None
+    parameters: dict[str, Any] = field(default_factory=dict)
+    deviations: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """JSON-serialisable form."""
@@ -49,12 +51,29 @@ class Result:
             "inputs": dict(self.inputs),
             "notes": list(self.notes),
             "declaration_hash": self.declaration_hash,
+            "parameters": _jsonable(self.parameters),
+            "deviations": list(self.deviations),
             "values": _frame_records(self.values),
             "tables": {k: _frame_records(v) for k, v in self.tables.items()},
         }
 
     def summary(self) -> str:
         return f"{self.component}: {self.verdict.value} ({self.rule})"
+
+
+def _jsonable(value: Any) -> Any:
+    """Plain-Python form of parameters (arrays, numpy scalars, dataclasses)."""
+    if isinstance(value, dict):
+        return {str(k): _jsonable(v) for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    if hasattr(value, "__dataclass_fields__"):
+        return {k: _jsonable(getattr(value, k)) for k in value.__dataclass_fields__}
+    return value
 
 
 def _frame_records(frame: pd.DataFrame) -> list[dict[str, Any]]:

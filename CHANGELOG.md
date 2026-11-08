@@ -37,5 +37,8 @@ Keep a Changelog, and the project follows semantic versioning. The protocol itse
   graph audit of an adjacency (edge length, elevation contrast, degree) and the
   training-only versus full-record correlation leakage.
 - Declaration sections `contrasts`, `factorial`, `fusion` and `strata`.
+- Every result records the parameters it used and the deviations from the declaration; the
+  declaration carries a file hash and a design hash (sections other than `data`), and the report
+  prints the declared conclusions next to the verdicts.
 - Markdown and JSON reports; command line interface (`validate`, `audit`, `anchor`,
   `factorial`, `fusion`, `anomaly`, `spatial`, `run`).

@@ -3,7 +3,7 @@
 Reads the engineered CHIRPS field and the released prediction arrays of the monthly
 precipitation benchmark over the Colombian Andes (Zenodo concept DOI
 10.5281/zenodo.21576207, or a checkout of the case-study repository), runs every
-component through a pre-registered declaration, and checks the headline numbers against
+component through a declared design, and checks the headline numbers against
 the values printed in the published provenance tables.
 
     python examples/boyaca_case_study/run.py --thesis-root /path/to/deposit --out report/

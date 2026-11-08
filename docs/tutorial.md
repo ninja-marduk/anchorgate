@@ -76,5 +76,5 @@ from anchorgate import write_report
 write_report("report/", results, bench)
 ```
 
-To make the run pre-registered, put the choices above in a declaration file and run
+To fix the design in one place, put the choices above in a declaration file and run
 `anchorgate run declaration.yaml --out report/`; the report then carries the file's hash.

@@ -5,7 +5,12 @@ are built, what the gate is, how many seeds are expected, which contrasts form t
 family, which strata are reported and what will be concluded on PASS and on FAIL. The
 package hashes the file's bytes and prints the hash in every report, so a declaration
 changed after scoring is visibly a different report. A declaration built in memory
-(`Declaration.from_dict`) is hashed too, but flagged as not pre-registered.
+(`Declaration.from_dict`) is hashed too and marked as coming from memory. Two hashes identify a
+declaration: the file hash (its bytes) and the design hash (every section except `data`, in
+canonical form), so the same design run on another machine carries the same design hash. Every
+component records in its result the parameters it actually used and lists any choice that was
+set at call time instead of taken from the declaration; the report prints both. The hash is
+provenance: it says which design a report followed, not when the design was written.
 
 ```yaml
 name: boyaca-monthly-precipitation

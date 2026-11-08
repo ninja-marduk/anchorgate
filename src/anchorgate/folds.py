@@ -299,6 +299,12 @@ def audit(
         notes=notes,
         tables={"splits": table, "effective_units": pd.DataFrame([units])},
         declaration_hash=declaration_hash,
+        parameters={
+            "assignments": [a.name for a in assignments],
+            "out_of_sample": list(out_of_sample),
+            "k": k,
+            "seed": seed,
+        },
     )
 
 

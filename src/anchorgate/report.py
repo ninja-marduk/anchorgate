@@ -82,10 +82,15 @@ def render_markdown(
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     out.append(f"Generated {stamp} with anchorgate {__version__}.")
     if declaration is not None:
-        tag = (
-            "pre-registered file" if declaration.preregistered else "in-memory, not pre-registered"
+        out.append(
+            f"Declared design: `{declaration.name}`, design hash `{declaration.design_hash}`,"
+            f" file hash `{declaration.sha256}` (from {declaration.source})."
         )
-        out.append(f"Declaration: `{declaration.name}`, SHA-256 `{declaration.sha256}` ({tag}).")
+        if declaration.conclusions:
+            out.append(
+                "Declared conclusions: "
+                + "; ".join(f"on {k.upper()}, {v}" for k, v in declaration.conclusions.items())
+            )
     if benchmark is not None:
         f = benchmark.reference
         o = benchmark.observations
@@ -122,6 +127,16 @@ def render_markdown(
         if r.notes:
             out.extend(f"- {n}" for n in r.notes)
             out.append("")
+        if r.parameters:
+            shown = {k: v for k, v in r.parameters.items() if k != "score_origins"}
+            so = r.parameters.get("score_origins")
+            if isinstance(so, list) and so:
+                shown["score_origins"] = f"{so[0]}..{so[-1]} ({len(so)})"
+            out.append("Parameters used: " + ", ".join(f"{k}={v}" for k, v in shown.items()))
+        if r.deviations:
+            out.append("Deviations from the declaration: " + "; ".join(r.deviations))
+        if r.parameters or r.deviations:
+            out.append("")
         out.append(_table(r.values))
         for name, t in r.tables.items():
             out.extend(["", f"### {name}", "", _table(t)])
@@ -139,7 +154,9 @@ def to_json(results: Sequence[Result], declaration: Declaration | None = None) -
         else {
             "name": declaration.name,
             "sha256": declaration.sha256,
-            "preregistered": declaration.preregistered,
+            "design_hash": declaration.design_hash,
+            "source": declaration.source,
+            "conclusions": dict(declaration.conclusions),
         },
         "results": [r.to_dict() for r in results],
     }

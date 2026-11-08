@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 
 from .data import Benchmark
-from .declaration import Declaration, Gate
+from .declaration import Declaration, Gate, deviations
 from .factorial import _origins, _select
 from .metrics import msess, pooled_r2
 from .references import build_references
@@ -328,4 +328,15 @@ def anomaly_skill(
         notes=notes,
         tables=tables,
         declaration_hash=decl.sha256 if decl else None,
+        parameters={
+            "score_origins": origins.tolist(),
+            "gate": vars(g),
+            "conformal": conformal,
+            "n_calibration": n_cal if conformal else None,
+            "alpha": alpha,
+            "by_lead": by_lead,
+        },
+        deviations=deviations(
+            decl, {"score_origins": score_origins is not None, "gate": gate is not None}
+        ),
     )
