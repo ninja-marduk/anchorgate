@@ -26,6 +26,13 @@ from .factorial import _origins, _select
 from .metrics import msess, pooled_r2
 from .references import build_references
 from .result import Result, Verdict
+from .uncertainty import (
+    block_indices,
+    correlation_sums,
+    interval,
+    median_correlation,
+    verdict_from_interval,
+)
 
 # ------------------------------------------------------------------ correlations
 
@@ -203,6 +210,8 @@ def anomaly_skill(
     clim = _select(clim_full, origins, cells)
     target = _select(benchmark.target, origins, cells)
     target_anom = target - clim
+    boot_idx = block_indices(int(origins.size), g.block, g.n_boot, seed=0)
+    boot_acc: dict[str, np.ndarray] = {}
 
     rows: list[dict[str, object]] = []
     lead_rows: list[dict[str, object]] = []
@@ -226,6 +235,8 @@ def anomaly_skill(
         }
         row.update(anomaly_scores(anom, target_anom))
         rows.append(row)
+        if kind == "forecast":
+            boot_acc[label] = median_correlation(correlation_sums(anom, target_anom), boot_idx)
         if by_lead:
             for j, lead in enumerate(benchmark.lead.tolist()):
                 lr: dict[str, object] = {
@@ -268,13 +279,18 @@ def anomaly_skill(
             v = grp[c].to_numpy(dtype=float)
             rec[f"{c}_mean"] = float(np.nanmean(v))
             rec[f"{c}_sd"] = float(np.nanstd(v, ddof=1)) if v.size > 1 else np.nan
-        stat = float(rec["acc_cell_median_mean"])  # type: ignore[arg-type]
+        labels = [lab for lab in grp["label"].tolist() if lab in boot_acc]
+        lower, upper = (
+            interval(np.mean([boot_acc[lab] for lab in labels], axis=0), g.level)
+            if labels
+            else (float("nan"), float("nan"))
+        )
+        rec["acc_cell_median_lower"] = lower
+        rec["acc_cell_median_upper"] = upper
         if n_seeds < g.min_seeds:
             rec["verdict"] = Verdict.INSUFFICIENT.value
-        elif np.isfinite(stat) and stat > 0 and float(rec["msess_mean"]) > 0:  # type: ignore[arg-type]
-            rec["verdict"] = Verdict.PASS.value
         else:
-            rec["verdict"] = Verdict.FAIL.value
+            rec["verdict"] = verdict_from_interval(lower, upper, 0.0).value
         cfg_rows.append(rec)
     per_config = pd.DataFrame(cfg_rows)
     verdicts = per_config["verdict"].tolist() if len(per_config) else []
@@ -292,7 +308,8 @@ def anomaly_skill(
     for _, r in per_config.iterrows():
         notes.append(
             f"{r['model']}[{r['features']}]: {r['verdict']} (per-cell temporal ACC, median over"
-            f" cells, seed mean {r['acc_cell_median_mean']:+.3f}; pattern ACC"
+            f" cells, seed mean {r['acc_cell_median_mean']:+.3f}, {g.level:.0%} interval"
+            f" [{r['acc_cell_median_lower']:+.3f}, {r['acc_cell_median_upper']:+.3f}]; pattern ACC"
             f" {r['acc_pattern_mean']:+.3f}; pooled ACC {r['acc_pooled_mean']:+.3f}, inflated;"
             f" MSESS {r['msess_mean']:+.3f}; n_seeds {int(r['n_seeds'])})"
         )
@@ -319,10 +336,12 @@ def anomaly_skill(
         values=values,
         verdict=verdict,
         rule=(
-            "A configuration shows skill beyond climatology only when the seed mean of its"
-            " per-cell temporal anomaly correlation (median over cells) and of its MSESS against"
-            f" climatology are both positive, over at least {g.min_seeds} seeds; the pooled"
-            " anomaly correlation is reported but never used."
+            "A configuration shows anomaly skill when the lower bound of the"
+            f" {g.level:.0%} block-bootstrap interval of the seed mean, over at least"
+            f" {g.min_seeds} seeds, of its per-cell temporal anomaly correlation (median over"
+            " cells) is positive; it fails when the upper bound is not; the MSESS against"
+            " climatology is reported next to it and the pooled anomaly correlation is"
+            " reported but never used."
         ),
         inputs={"observations": benchmark.inputs().get("observations", ""), **inputs},
         notes=notes,

@@ -19,6 +19,14 @@ from .declaration import Declaration, Gate, deviations
 from .metrics import categorical_scores, score_table, tercile_events
 from .references import build_references, training_terciles
 from .result import Result, Verdict, array_hash
+from .uncertainty import (
+    block_indices,
+    interval,
+    skill_from_sums,
+    skill_horizon,
+    squared_error_sums,
+    verdict_from_interval,
+)
 
 SCORE_COLUMNS = ["pooled_r2", "per_cell_nse", "msess", "rmse", "mae", "bias"]
 
@@ -68,6 +76,11 @@ def anchor(
     refs = build_references(obs, benchmark.origin_period, benchmark.lead, ref_names)
     target = _select(benchmark.target, origins, cells)
     gate_ref = _select(refs[g.reference], origins, cells)
+    boot_idx = block_indices(int(origins.size), g.block, g.n_boot, seed=0)
+    se_ref = squared_error_sums(gate_ref, target, per_lead=False)
+    se_ref_lead = squared_error_sums(gate_ref, target, per_lead=True)
+    boot: dict[str, np.ndarray] = {}
+    boot_lead: dict[str, np.ndarray] = {}
 
     rows: list[dict[str, object]] = []
     lead_rows: list[dict[str, object]] = []
@@ -98,6 +111,13 @@ def anchor(
         }
         row.update(score_table(pred, target, gate_ref))
         rows.append(row)
+        if kind == "forecast" and g.metric == "msess":
+            boot[name] = skill_from_sums(
+                squared_error_sums(pred, target, per_lead=False), se_ref, boot_idx
+            )
+            boot_lead[name] = skill_from_sums(
+                squared_error_sums(pred, target, per_lead=True), se_ref_lead, boot_idx
+            )
         if by_lead:
             for j, lead in enumerate(benchmark.lead.tolist()):
                 lr: dict[str, object] = {
@@ -131,7 +151,10 @@ def anchor(
         score_one(f.label, "forecast", _select(f.pred, origins, cells), f.model, f.features, f.seed)
 
     values = pd.DataFrame(rows)
-    per_config = _aggregate(values[values["kind"] == "forecast"], g)
+    lead_df = pd.DataFrame(lead_rows)
+    per_config, lead_cfg = _aggregate(
+        values[values["kind"] == "forecast"], lead_df, g, boot, boot_lead, benchmark.lead
+    )
     verdicts = per_config["verdict"].tolist() if len(per_config) else []
     if any(v == Verdict.PASS.value for v in verdicts):
         verdict = Verdict.PASS
@@ -148,11 +171,14 @@ def anchor(
     for _, r in per_config.iterrows():
         notes.append(
             f"{r['model']}[{r['features']}]: {r['verdict']} (seed mean {g.metric}"
-            f" {r[g.metric + '_mean']:+.3f}, n_seeds {int(r['n_seeds'])})"
+            f" {r[g.metric + '_mean']:+.3f}, {g.level:.0%} interval"
+            f" [{r[g.metric + '_lower']:+.3f}, {r[g.metric + '_upper']:+.3f}],"
+            f" n_seeds {int(r['n_seeds'])}, skill horizon {int(r['skill_horizon'])})"
         )
     tables = {"by_configuration": per_config}
     if by_lead:
-        tables["by_lead"] = pd.DataFrame(lead_rows)
+        tables["by_lead"] = lead_df
+        tables["by_lead_configuration"] = lead_cfg
     if categorical:
         tables["categorical"] = pd.DataFrame(cat_rows)
     if decl is not None:
@@ -187,8 +213,10 @@ def anchor(
         values=values,
         verdict=verdict,
         rule=(
-            f"A configuration passes when the mean over at least {g.min_seeds} seeds of {g.metric}"
-            f" against {g.reference} exceeds {g.threshold:g}; fewer seeds cannot pass."
+            f"A configuration passes when the lower bound of the {g.level:.0%} block-bootstrap"
+            f" interval (blocks of {g.block} origins) of the mean over at least {g.min_seeds}"
+            f" seeds of {g.metric} against {g.reference} exceeds {g.threshold:g}; it fails when"
+            " the upper bound does not; an interval that straddles the threshold is INSUFFICIENT."
         ),
         inputs=inputs,
         notes=notes,
@@ -199,20 +227,41 @@ def anchor(
     )
 
 
-def _aggregate(forecast_rows: pd.DataFrame, g: Gate) -> pd.DataFrame:
-    """Seed mean and spread per configuration, and the gate verdict."""
+def _aggregate(
+    forecast_rows: pd.DataFrame,
+    lead_rows: pd.DataFrame,
+    g: Gate,
+    boot: dict[str, np.ndarray],
+    boot_lead: dict[str, np.ndarray],
+    leads: np.ndarray,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Seed mean and spread per configuration, the bootstrap interval of the seed mean of
+    the gate metric, the skill horizon and the verdict; and the same per lead."""
     cols = ["model", "features"]
-    out = []
+    lead_vals = np.asarray(leads, dtype=int)
+    cfg_cols = [
+        *cols,
+        "n_seeds",
+        "n_runs",
+        *(f"{c}_mean" for c in SCORE_COLUMNS),
+        *(f"{c}_sd" for c in SCORE_COLUMNS),
+        f"{g.metric}_lower",
+        f"{g.metric}_upper",
+        "skill_horizon",
+        "verdict",
+    ]
+    lead_cols = [
+        *cols,
+        "lead",
+        "n_runs",
+        f"{g.metric}_mean",
+        f"{g.metric}_lower",
+        f"{g.metric}_upper",
+    ]
     if forecast_rows.empty:
-        return pd.DataFrame(
-            columns=[
-                *cols,
-                "n_seeds",
-                *(f"{c}_mean" for c in SCORE_COLUMNS),
-                *(f"{c}_sd" for c in SCORE_COLUMNS),
-                "verdict",
-            ]
-        )
+        return pd.DataFrame(columns=cfg_cols), pd.DataFrame(columns=lead_cols)
+    out = []
+    lead_out = []
     for (model, features), grp in forecast_rows.groupby(cols, sort=False):
         labelled = grp[grp["seed"].notna()]
         # distinct labelled seeds, plus one per unlabelled run (which cannot be told apart)
@@ -230,14 +279,44 @@ def _aggregate(forecast_rows: pd.DataFrame, g: Gate) -> pd.DataFrame:
             rec[f"{c}_mean"] = means[c]
             rec[f"{c}_sd"] = float(np.nanstd(vals, ddof=1)) if vals.size > 1 else np.nan
         stat = means.get(g.metric, float("nan"))
+        labels = [lab for lab in grp["label"].tolist() if lab in boot]
+        lower = upper = float("nan")
+        horizon = 0
+        if labels:
+            draws = np.mean([boot[lab] for lab in labels], axis=0)
+            lower, upper = interval(draws, g.level)
+            draws_lead = np.mean([boot_lead[lab] for lab in labels], axis=0)
+            lo_hi = [interval(draws_lead[:, j], g.level) for j in range(draws_lead.shape[1])]
+            lo_lead = np.array([lh[0] for lh in lo_hi])
+            horizon = skill_horizon(lo_lead, lead_vals, g.threshold)
+            if len(lead_rows):
+                lr = lead_rows[(lead_rows["model"] == model) & (lead_rows["features"] == features)]
+                for j, lead in enumerate(lead_vals.tolist()):
+                    pts = lr.loc[lr["lead"] == lead, g.metric].to_numpy(dtype=float)
+                    lead_out.append(
+                        {
+                            "model": model,
+                            "features": features,
+                            "lead": int(lead),
+                            "n_runs": int(pts.size),
+                            f"{g.metric}_mean": float(np.nanmean(pts)) if pts.size else np.nan,
+                            f"{g.metric}_lower": lo_hi[j][0],
+                            f"{g.metric}_upper": lo_hi[j][1],
+                        }
+                    )
+        rec[f"{g.metric}_lower"] = lower
+        rec[f"{g.metric}_upper"] = upper
+        rec["skill_horizon"] = horizon
         if n_seeds < g.min_seeds:
             rec["verdict"] = Verdict.INSUFFICIENT.value
+        elif labels:
+            rec["verdict"] = verdict_from_interval(lower, upper, g.threshold).value
         elif np.isfinite(stat) and stat > g.threshold:
             rec["verdict"] = Verdict.PASS.value
         else:
             rec["verdict"] = Verdict.FAIL.value
         out.append(rec)
-    return pd.DataFrame(out)
+    return pd.DataFrame(out), pd.DataFrame(lead_out, columns=lead_cols)
 
 
 def gate_table(result: Result) -> pd.DataFrame:

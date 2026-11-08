@@ -21,7 +21,12 @@ def test_known_answers(benchmark):
     assert cfg.loc["climatology", "verdict"] == "FAIL"
     assert cfg.loc["single", "verdict"] == "INSUFFICIENT"
     assert res.verdict == Verdict.PASS
-    assert set(res.tables) == {"by_configuration", "by_lead", "categorical"}
+    assert set(res.tables) == {
+        "by_configuration",
+        "by_lead",
+        "by_lead_configuration",
+        "categorical",
+    }
     cat = res.tables["categorical"].set_index(["label", "event"])
     assert cat.loc[("perfect[BASIC] seed 1", "dry"), "hss"] == pytest.approx(1.0)
     assert abs(cat.loc[("climatology", "wet"), "hss"]) < 0.2

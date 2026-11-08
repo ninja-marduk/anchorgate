@@ -109,7 +109,7 @@ def ridge_forecast(obs: Observations, features: str, seed: int) -> Forecast:
 
 def load_observations(args: argparse.Namespace) -> Observations:
     if args.observations is None:
-        return synthetic_observations(seed=0, n_years=40, shape=(6, 8), ar=0.6)
+        return synthetic_observations(seed=0, n_years=40, shape=(6, 8), ar=args.ar)
     import xarray as xr
 
     with xr.open_dataset(args.observations) as ds:
@@ -125,6 +125,12 @@ def main() -> int:
         "--observations", default=None, help="NetCDF field (time, y, x); synthetic when omitted"
     )
     ap.add_argument("--variable", default="precip")
+    ap.add_argument(
+        "--ar",
+        type=float,
+        default=0.6,
+        help="lag-one autocorrelation of the synthetic anomaly (0 = white noise, nothing to learn)",
+    )
     ap.add_argument("--cutoff", default="2016-07", help="first month that is not training, YYYY-MM")
     ap.add_argument("--out", default=None, help="directory for report.md and report.json")
     args = ap.parse_args()

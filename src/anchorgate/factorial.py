@@ -88,7 +88,7 @@ def _scorer(
 
 def lead_scores(
     benchmark: Benchmark,
-    metric: str = "pooled_r2",
+    metric: str = "msess",
     *,
     score_origins: Sequence[int] | np.ndarray | None = None,
     mask: np.ndarray | str | None = None,
@@ -123,7 +123,7 @@ def lead_scores(
 
 def responses(
     benchmark: Benchmark,
-    metric: str = "pooled_r2",
+    metric: str = "msess",
     *,
     aggregate: str = "lead_mean",
     score_origins: Sequence[int] | np.ndarray | None = None,
@@ -201,28 +201,28 @@ def nemenyi_cd(k: int, n: int, alpha: float = 0.05) -> float:
 
 
 def minimum_detectable_effect(
-    paired_sd: Sequence[float] | np.ndarray, n: int, alpha: float = 0.05
+    paired_sd: Sequence[float] | np.ndarray, n: int, alpha: float = 0.05, family: int = 1
 ) -> dict[str, float]:
     """Smallest paired mean difference a two-sided paired t-test at ``n`` blocks can
-    separate, ``t_crit * s_d / sqrt(n)``, over the given paired standard deviations."""
+    separate, ``t_crit * s_d / sqrt(n)``, over the given paired standard deviations; at the
+    nominal level and at the family level ``alpha / family``, the level the smallest
+    p-value of a Holm family must reach."""
     sd = np.asarray(paired_sd, dtype=float)
     sd = sd[np.isfinite(sd)]
+    keys = ("factor", "min", "median", "max")
     if n < 2 or sd.size == 0:
-        return {
-            "n": float(n),
-            "factor": float("nan"),
-            "min": float("nan"),
-            "median": float("nan"),
-            "max": float("nan"),
-        }
-    factor = float(stats.t.ppf(1 - alpha / 2, n - 1) / np.sqrt(n))
-    return {
-        "n": float(n),
-        "factor": factor,
-        "min": float(factor * sd.min()),
-        "median": float(factor * np.median(sd)),
-        "max": float(factor * sd.max()),
-    }
+        out = {"n": float(n), "family": float(family)}
+        out.update({k: float("nan") for k in keys})
+        out.update({f"{k}_family": float("nan") for k in keys})
+        return out
+    out = {"n": float(n), "family": float(family)}
+    for suffix, level in (("", alpha), ("_family", alpha / max(1, family))):
+        factor = float(stats.t.ppf(1 - level / 2, n - 1) / np.sqrt(n))
+        out[f"factor{suffix}"] = factor
+        out[f"min{suffix}"] = float(factor * sd.min())
+        out[f"median{suffix}"] = float(factor * np.median(sd))
+        out[f"max{suffix}"] = float(factor * sd.max())
+    return out
 
 
 # ------------------------------------------------------------- blocked analysis
@@ -559,7 +559,7 @@ def factorial(
     declaration: Declaration | None = None,
     *,
     factors: Sequence[str] = ("model", "features"),
-    metric: str = "pooled_r2",
+    metric: str = "msess",
     aggregate: str = "lead_mean",
     score_origins: Sequence[int] | np.ndarray | None = None,
     mask: np.ndarray | str | None = None,
@@ -666,7 +666,9 @@ def factorial(
             f" one in {tighter} of them"
         )
         n_blocks = int(tested["n"].min())
-        mde = minimum_detectable_effect(tested["sd_d"].to_numpy(), n_blocks, alpha)
+        mde = minimum_detectable_effect(
+            tested["sd_d"].to_numpy(), n_blocks, alpha, family=len(tested)
+        )
         span = float(
             cfg.loc[cfg["n_seeds"] >= 2, "mean"].max() - cfg.loc[cfg["n_seeds"] >= 2, "mean"].min()
         )
@@ -676,6 +678,12 @@ def factorial(
         notes.append(
             f"minimum detectable effect at {n_blocks} seeds: {mde['min']:.3f} to {mde['max']:.3f}"
             f" ({metric}, median {mde['median']:.3f}); the configuration means span {span:.3f}"
+        )
+        notes.append(
+            f"at the family level (alpha {alpha:g} / {len(tested)}) the minimum detectable"
+            f" effect is {mde['min_family']:.3f} to {mde['max_family']:.3f} (median"
+            f" {mde['median_family']:.3f}); {n_blocks} seeds cannot resolve this family for"
+            " effects below that"
         )
 
     # units behind the origins, and Friedman over them

@@ -17,8 +17,13 @@ periods, disjoint windows), so that no later test writes an `N` the record does 
 
 ## C1, anchoring
 
-A configuration passes when the mean over at least `min_seeds` seeds of the skill score
-against the reference exceeds the threshold; fewer seeds cannot pass.
+A configuration passes when the lower bound of the block-bootstrap interval (level
+`level`, blocks of `block` origins, `n_boot` resamples, declared in the gate) of the
+mean over at least `min_seeds` seeds of the skill score against the reference exceeds
+the threshold; it fails when the upper bound does not; an interval that straddles the
+threshold is INSUFFICIENT, and fewer seeds cannot pass. The same interval per lead gives
+the skill horizon: the last lead of the unbroken run, from the shortest lead, whose lower
+bound clears the threshold.
 
 Every forecast and every reference (per-cell climatology, persistence, seasonal naive)
 is scored on identical targets. Pooled R2 and per-cell NSE are both reported, because a
@@ -42,7 +47,8 @@ of disjoint windows are printed next to every contrast.
 
 An ensemble's gain is claimed only over its recalibrated best base learner, chosen on the
 fit origins, on an assignment with no target-period overlap and at least `min_seeds`
-paired runs; the mean combination gain over runs must be positive.
+paired runs; the mean combination gain and the mean total gain over the raw best must
+both be positive, and both are printed with their spread over runs.
 
 The gain over the raw best base learner splits into a calibration term (what an affine
 recalibration of the best single learner already delivers) and a combination term (what
@@ -51,9 +57,11 @@ scored origins is a selection advantage no forecaster has, and its size is print
 
 ## C4, anomaly skill
 
-A configuration shows skill beyond climatology only when the seed mean of its per-cell
-temporal anomaly correlation (median over cells) and of its MSESS against climatology
-are both positive; the pooled anomaly correlation is reported but never used.
+A configuration shows anomaly skill when the lower bound of the block-bootstrap
+interval of the seed mean of its per-cell temporal anomaly correlation (median over
+cells) is positive; it fails when the upper bound is not. The MSESS against climatology
+is reported next to it (component 1 already gates on it) and the pooled anomaly
+correlation is reported but never used.
 
 Anomalies are taken against the training climatology, on which that climatology scores
 exactly zero. The correlation is computed per cell over time and per origin over space;

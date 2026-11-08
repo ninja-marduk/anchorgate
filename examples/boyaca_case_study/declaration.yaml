@@ -23,6 +23,7 @@ folds:
   - {kind: purged, name: purged, out_of_sample: true}
 factorial: {metric: pooled_r2, aggregate: lead_mean, n_perm: 20000}
 fusion:
+  metric: pooled_r2
   base: [{model: ConvLSTM-Bidirectional, features: BASIC}, {model: GNN-TAT-GAT, features: BASIC}]
   ensemble: {model: Late-Fusion-released, features: BASIC}
   assignment: purged

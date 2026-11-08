@@ -58,5 +58,8 @@ rules behind them, and the numbers.
   seeds on a synthetic field; every component in under a minute.
 - `examples/eight_regimes.py`: eight CHIRPS regions, references only; how strong the
   reference is and how much ordinary folds leak outside one case study.
+- `examples/enso_ridge.py`: a per-cell ridge on lagged Nino 3.4 (and a damped-persistence
+  baseline) on the same deposit and purged block as the case study; the one configuration
+  on this benchmark that clears the gate, with its skill horizon.
 - `examples/boyaca_case_study/`: the published monthly precipitation benchmark over the
   Colombian Andes, reproduced from its deposit and checked against the published numbers.

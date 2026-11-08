@@ -136,7 +136,7 @@ def test_seed_spread_on_the_purged_block(boyaca):
 
 
 def test_factorial_reproduces_the_blocked_analysis(p30_factorial):
-    res = factorial(p30_factorial, n_perm=20000, validate=False)
+    res = factorial(p30_factorial, metric="pooled_r2", n_perm=20000, validate=False)
     assert len(res.values) == 18
     anova = res.tables["anova"].set_index("source")
     assert anova.loc["features", "F"] == pytest.approx(6.40, abs=0.01)
@@ -205,6 +205,7 @@ def test_fusion_decomposition_on_the_purged_block(boyaca):
         base=base,
         ensemble=ens,
         assignment="purged",
+        metric="pooled_r2",
         score_origins=range(21, 33),
         validate=False,
     )
@@ -220,8 +221,11 @@ def test_fusion_decomposition_on_the_purged_block(boyaca):
     picks = dict(zip(v["seed"], v["picked_raw"], strict=True))
     assert picks[42].startswith("ConvLSTM") and picks[456].startswith("ConvLSTM")
     assert picks[123].startswith("GNN-TAT")
-    assert res.verdict.value == "PASS"  # combination +0.021 over the recalibrated learner
-    table, _ = fusion_ladder(boyaca, base=base, ensemble=ens, score=range(21, 33))
+    # combination adds +0.021 over the recalibrated learner, but the total gain is negative
+    assert res.verdict.value == "FAIL"
+    table, _ = fusion_ladder(
+        boyaca, base=base, ensemble=ens, metric="pooled_r2", score=range(21, 33)
+    )
     rungs = table.set_index("rung")
     assert rungs.loc["purged", "overlap_fraction"] == 0.0
     assert rungs.loc["shuffled", "fusion"] == pytest.approx(0.665, abs=0.01)

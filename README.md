@@ -146,6 +146,9 @@ Not a training framework: inputs are saved predictions.
 - `examples/eight_regimes.py`: eight CHIRPS regions read remotely, references only; the
   strength of the climatology and the leakage of ordinary folds outside one case study
   (`pip install "anchorgate[remote]"`).
+- `examples/enso_ridge.py`: a per-cell ridge on lagged Nino 3.4 (and a damped-persistence
+  baseline) on the same deposit and purged block as the case study; the one configuration
+  on this benchmark that clears the gate, with its skill horizon.
 - `examples/boyaca_case_study/`: the published monthly precipitation benchmark over the
   Colombian Andes, run from its deposit through a declared design and checked
   against the published provenance numbers.

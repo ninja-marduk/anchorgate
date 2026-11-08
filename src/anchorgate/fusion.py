@@ -158,7 +158,7 @@ def decompose_fusion(
     assignment: FoldAssignment | str = "purged",
     score_origins: Sequence[int] | np.ndarray | None = None,
     mask: np.ndarray | str | None = None,
-    metric: str = "pooled_r2",
+    metric: str = "msess",
     min_seeds: int | None = None,
     k: int = 5,
     seed: int = 42,
@@ -359,8 +359,10 @@ def decompose_fusion(
         f"fusion {values['fusion'].mean():.3f} +/- {fusion_sd:.3f};"
         f" best raw base learner (chosen on fit) {values['best_raw'].mean():.3f};"
         f" recalibrated {values['best_recal'].mean():.3f} ({metric})",
-        f"gain over the raw best {tot_gain:+.3f} = calibration {cal_gain:+.3f}"
-        f" + combination {comb_gain:+.3f}",
+        f"gain over the raw best {tot_gain:+.3f} +/- {_sd(values['total_gain']):.3f}"
+        f" = calibration {cal_gain:+.3f} +/- {_sd(values['calibration_gain']):.3f}"
+        f" + combination {comb_gain:+.3f} +/- {_sd(values['combination_gain']):.3f}"
+        f" (over {n_runs} paired runs)",
         f"selection advantage of picking the base learner on the scored origins: raw"
         f" {values['selection_advantage_raw'].mean():+.3f}, recalibrated"
         f" {values['selection_advantage_recal'].mean():+.3f}",
@@ -380,10 +382,15 @@ def decompose_fusion(
     elif not out_of_sample:
         verdict = Verdict.INSUFFICIENT
         notes.append("the assignment is not out of sample: the gain cannot be claimed on it")
-    elif comb_gain > 0:
+    elif comb_gain > 0 and tot_gain > 0:
         verdict = Verdict.PASS
     else:
         verdict = Verdict.FAIL
+        if comb_gain > 0:
+            notes.append(
+                "combination adds over the recalibrated learner but the ensemble still loses to"
+                " its raw best member: recalibration costs more than combination returns"
+            )
     return Result(
         component="C3 fusion decomposition",
         title=f"Calibration versus combination on '{fa.name}' ({metric})",
@@ -392,7 +399,8 @@ def decompose_fusion(
         rule=(
             "An ensemble's gain is claimed only over its recalibrated best base learner, chosen"
             " on the fit origins, on an assignment with no target-period overlap and at least"
-            f" {min_seeds} paired runs; the mean combination gain over runs must be positive."
+            f" {min_seeds} paired runs; the mean combination gain and the mean total gain over"
+            " the raw best must both be positive."
         ),
         inputs=inputs,
         notes=notes,
@@ -429,6 +437,10 @@ def decompose_fusion(
     )
 
 
+def _sd(v: pd.Series) -> float:
+    return float(v.std(ddof=1)) if len(v) > 1 else float("nan")
+
+
 def fusion_ladder(
     benchmark: Benchmark,
     *,
@@ -437,7 +449,7 @@ def fusion_ladder(
     score: Sequence[int] | np.ndarray | None = None,
     rungs: Sequence[FoldAssignment | str] = ("released", "shuffled", "contiguous", "purged"),
     mask: np.ndarray | str | None = None,
-    metric: str = "pooled_r2",
+    metric: str = "msess",
     k: int = 5,
     seed: int = 42,
 ) -> tuple[pd.DataFrame, list[Result]]:

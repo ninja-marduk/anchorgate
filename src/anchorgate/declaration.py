@@ -28,6 +28,9 @@ class Gate:
     threshold: float = 0.0
     min_seeds: int = 2
     reference: str = "climatology"
+    level: float = 0.9
+    block: int = 3
+    n_boot: int = 1000
 
 
 @dataclass
@@ -104,6 +107,9 @@ class Declaration:
             threshold=float(gate_doc.get("threshold", 0.0)),
             min_seeds=int(gate_doc.get("min_seeds", 2)),
             reference=str(gate_doc.get("reference", "climatology")),
+            level=float(gate_doc.get("level", 0.9)),
+            block=int(gate_doc.get("block", 3)),
+            n_boot=int(gate_doc.get("n_boot", 1000)),
         )
         refs = doc.get("references") or list(DEFAULT_REFERENCES)
         d = cls(

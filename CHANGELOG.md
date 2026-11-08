@@ -37,6 +37,15 @@ Keep a Changelog, and the project follows semantic versioning. The protocol itse
   graph audit of an adjacency (edge length, elevation contrast, degree) and the
   training-only versus full-record correlation leakage.
 - Declaration sections `contrasts`, `factorial`, `fusion` and `strata`.
+- Example `enso_ridge.py`: an ENSO-informed ridge and a damped-persistence baseline on the
+  Boyaca deposit; `bring_your_own_model.py` takes `--ar`.
+- Verdicts read from intervals: components 1 and 4 draw a circular moving-block bootstrap
+  over scored origins (gate fields `level`, `block`, `n_boot`), pass on the lower bound,
+  fail on the upper bound and return INSUFFICIENT in between; component 1 reports the skill
+  horizon per configuration and a per-lead table with intervals. Component 3 passes only when
+  the combination gain and the total gain over the raw best are both positive. Component 2
+  prints the minimum detectable effect at the family level. Components 2 and 3 default to
+  MSESS; the Boyaca declaration keeps pooled R2 to stay comparable with the published benchmark.
 - Every result records the parameters it used and the deviations from the declaration; the
   declaration carries a file hash and a design hash (sections other than `data`), and the report
   prints the declared conclusions next to the verdicts.
