@@ -48,11 +48,20 @@ def open_chirps(local: str | None):
 
     if local:
         return xr.open_dataset(local, chunks={})
+    import aiohttp
     import fsspec
 
-    # large read-ahead blocks keep the number of range requests low; the CHC server
-    # answers HTTP 429 to clients that issue many small ones
-    handle = fsspec.open(CHIRPS_URL, mode="rb", block_size=2**26, cache_type="readahead").open()
+    # The file is about 7.8 GB, so it is read by HTTP range requests. The CHC server
+    # answers 429 to clients that issue many small ones and is slow for large ones;
+    # 16 MB read-ahead blocks with a long socket timeout is the compromise that works.
+    # When the server still limits, download the file once and pass --local.
+    handle = fsspec.open(
+        CHIRPS_URL,
+        mode="rb",
+        block_size=2**24,
+        cache_type="readahead",
+        client_kwargs={"timeout": aiohttp.ClientTimeout(total=None, sock_read=900)},
+    ).open()
     return xr.open_dataset(handle, engine="h5netcdf", chunks={})
 
 
@@ -124,10 +133,10 @@ def main() -> int:
             )
         except Exception as exc:  # one region must not stop the others
             print(f"{box[0]:<28} ERROR {type(exc).__name__}: {str(exc)[:80]}")
-            if "429" in str(exc):
+            if "429" in str(exc) or "Timeout" in type(exc).__name__:
                 print(
-                    "  the server is rate-limiting range requests; download the file once"
-                    " and pass it with --local"
+                    "  the server is rate-limiting or stalling range requests; download the"
+                    " file once and pass it with --local"
                 )
                 break
     table = pd.DataFrame(rows)
