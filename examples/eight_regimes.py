@@ -25,7 +25,7 @@ from anchorgate import Benchmark, Gate, Observations, anchor, audit, ladder, ref
 from anchorgate.synthetic import origins_after_cutoff
 
 CHIRPS_URL = (
-    "https://data.chc.ucsb.edu/products/CHIRPS-2.0/global_monthly/netcdf/chirps-v2.0.monthly.nc"
+    "https://data.chc.ucsb.edu/products/CHIRPS/v2.0/global_monthly/netcdf/chirps-v2.0.monthly.nc"
 )
 TRAIN_FRACTION = 0.8
 LEADS = np.arange(1, 13)
@@ -50,7 +50,9 @@ def open_chirps(local: str | None):
         return xr.open_dataset(local, chunks={})
     import fsspec
 
-    handle = fsspec.open(CHIRPS_URL, mode="rb", block_size=2**22).open()
+    # large read-ahead blocks keep the number of range requests low; the CHC server
+    # answers HTTP 429 to clients that issue many small ones
+    handle = fsspec.open(CHIRPS_URL, mode="rb", block_size=2**26, cache_type="readahead").open()
     return xr.open_dataset(handle, engine="h5netcdf", chunks={})
 
 
@@ -122,6 +124,12 @@ def main() -> int:
             )
         except Exception as exc:  # one region must not stop the others
             print(f"{box[0]:<28} ERROR {type(exc).__name__}: {str(exc)[:80]}")
+            if "429" in str(exc):
+                print(
+                    "  the server is rate-limiting range requests; download the file once"
+                    " and pass it with --local"
+                )
+                break
     table = pd.DataFrame(rows)
     if len(table):
         print(
