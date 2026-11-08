@@ -27,3 +27,6 @@ data/local/
 reports/
 *.nc
 !tests/data/*.nc
+
+# Documentation build
+site/

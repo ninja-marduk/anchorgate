@@ -1,0 +1,33 @@
+# Pre-registered declaration for the Boyaca monthly precipitation benchmark.
+# {thesis_root} is filled by run.py with the deposit location; everything else is fixed
+# before scoring, and the SHA-256 of this file is printed in every report.
+name: boyaca-monthly-precipitation
+data:
+  observations:
+    format: field
+    path: "{thesis_root}/data/output/complete_dataset_with_features_with_clusters_elevation_windows_imfs_with_onehot_elevation_clean.nc"
+    variable: total_precipitation
+    cutoff: "2016-07"
+  forecasts:
+    - {format: directory, pattern: "{thesis_root}/models/output/V2_Enhanced_Models/SEED*/map_exports/H12/BASIC/ConvLSTM_Bidirectional/predictions.npy", model: ConvLSTM-Bidirectional, features: BASIC}
+    - {format: directory, pattern: "{thesis_root}/models/output/V4_GNN_TAT_Models/SEED*/map_exports/H12/BASIC/GNN_TAT_GAT/predictions.npy", model: GNN-TAT-GAT, features: BASIC}
+    - {format: directory, pattern: "{thesis_root}/models/output/V10_Late_Fusion/SEED*/predictions.npy", model: Late-Fusion-released, features: BASIC}
+scoring: {purged: {start: 21, stop: 33}}       # the twelve origins whose targets run 2023-04 to 2025-02
+references: [climatology, persistence, seasonal_naive]
+gate: {metric: msess, reference: climatology, threshold: 0.0, min_seeds: 2}
+seeds_expected: 3
+folds:
+  - {kind: released, name: released}
+  - {kind: shuffled, name: shuffled, k: 5, seed: 42}
+  - {kind: contiguous, name: contiguous, k: 5}
+  - {kind: purged, name: purged, out_of_sample: true}
+factorial: {metric: pooled_r2, aggregate: lead_mean, n_perm: 20000}
+fusion:
+  base: [{model: ConvLSTM-Bidirectional, features: BASIC}, {model: GNN-TAT-GAT, features: BASIC}]
+  ensemble: {model: Late-Fusion-released, features: BASIC}
+  assignment: purged
+strata:
+  elevation: {variable: elevation, edges: [1500, 2800], labels: [low, mid, high]}
+conclusions:
+  pass: "at least one configuration extracts information beyond the per-cell climatology on the purged block"
+  fail: "no configuration exceeds the per-cell climatology on the purged block; the ranking between them is unresolved at three seeds"

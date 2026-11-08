@@ -139,6 +139,20 @@ collapse diagnostics, the gate and the declaration.
 
 Not a training framework: inputs are saved predictions.
 
+## Examples
+
+- `examples/bring_your_own_model.py`: a per-cell ridge regression on lagged anomalies with
+  three bootstrap seeds, on a synthetic field; every component in about half a minute.
+- `examples/eight_regimes.py`: eight CHIRPS regions read remotely, references only; the
+  strength of the climatology and the leakage of ordinary folds outside one case study
+  (`pip install "anchorgate[remote]"`).
+- `examples/boyaca_case_study/`: the published monthly precipitation benchmark over the
+  Colombian Andes, run from its deposit through a pre-registered declaration and checked
+  against the published provenance numbers.
+
+Documentation: `mkdocs serve` after `pip install -e ".[docs]"`; the rules page states
+every conclusion rule in one sentence.
+
 ## Reproducibility
 
 The test suite includes synthetic cases with known answers (a perfect forecast scores

@@ -7,7 +7,7 @@ from collections.abc import Iterable
 import numpy as np
 
 from ._time import PERIODS_PER_YEAR, period_of_year
-from .data import Observations
+from .data import Forecast, Observations
 
 REFERENCE_NAMES = ("climatology", "persistence", "seasonal_naive")
 
@@ -77,3 +77,34 @@ def build_references(
             raise ValueError(f"unknown reference {name!r}; known: {sorted(BUILDERS)}")
         out[name] = BUILDERS[name](obs, origin_period, lead)
     return out
+
+
+def reference_forecast(
+    obs: Observations,
+    origin_idx: np.ndarray,
+    lead: np.ndarray,
+    name: str,
+    features: str = "",
+) -> Forecast:
+    """A reference packaged as a :class:`Forecast`, so that a benchmark with no trained
+    model (a references-only run, or a new region) can still go through every
+    component. The targets are the observations at ``origin + lead``."""
+    oi = np.asarray(origin_idx, dtype=int)
+    lead_arr = np.asarray(lead, dtype=int)
+    origin_period = obs.period[oi]
+    tp = origin_period[:, None] + lead_arr[None, :]
+    pred = build_references(obs, origin_period, lead_arr, (name,))[name]
+    return Forecast(
+        pred=pred,
+        target=obs.at(tp),
+        origin_time=obs.time[oi],
+        lead=lead_arr,
+        model=name,
+        features=features,
+        seed=None,
+        space_shape=obs.space_shape,
+        lat=obs.lat,
+        lon=obs.lon,
+        mask=obs.mask,
+        source="reference",
+    )

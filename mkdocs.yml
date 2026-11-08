@@ -1,0 +1,48 @@
+site_name: anchorgate
+site_description: An evaluation protocol with a gate for spatiotemporal predictions
+repo_url: https://github.com/ninja-marduk/anchorgate
+repo_name: ninja-marduk/anchorgate
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: blue grey
+      toggle:
+        icon: material/weather-night
+        name: dark mode
+    - scheme: slate
+      primary: blue grey
+      toggle:
+        icon: material/weather-sunny
+        name: light mode
+
+nav:
+  - Overview: index.md
+  - The rules: rules.md
+  - The declaration: declaration.md
+  - Tutorial, bring your own model: tutorial.md
+  - API reference: api.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: sphinx
+            show_source: false
+            members_order: source
+            show_root_heading: true
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.highlight

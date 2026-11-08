@@ -55,3 +55,41 @@ def test_training_terciles_bracket_the_training_values(obs):
     frac_wet = (jan > hi[0]).mean(0)
     assert np.all(np.abs(frac_dry - 1 / 3) < 0.1)
     assert np.all(np.abs(frac_wet - 1 / 3) < 0.1)
+
+
+def test_reference_forecast_packages_a_reference(obs):
+    from anchorgate import Benchmark, anchor, reference_forecast
+    from anchorgate.synthetic import origins_after_cutoff
+
+    leads = np.arange(1, 7)
+    origins = origins_after_cutoff(obs, leads)
+    pers = reference_forecast(obs, origins, leads, "persistence")
+    seas = reference_forecast(obs, origins, leads, "seasonal_naive")
+    assert pers.model == "persistence" and pers.seed is None
+    assert pers.pred.shape == (origins.size, 6, obs.n_cell)
+    bench = Benchmark([pers, seas], obs)
+    bench.validate()
+    res = anchor(bench, validate=False)
+    v = res.values.set_index("label")
+    # the packaged references score exactly as the built-in ones
+    assert v.loc["persistence (single run)", "msess"] == pytest.approx(
+        v.loc["persistence", "msess"]
+    )
+    assert v.loc["seasonal_naive (single run)", "msess"] == pytest.approx(
+        v.loc["seasonal_naive", "msess"]
+    )
+
+
+def test_synthetic_autocorrelation_gives_lagged_information():
+    from anchorgate.synthetic import synthetic_observations
+
+    white = synthetic_observations(seed=3, ar=0.0)
+    red = synthetic_observations(seed=3, ar=0.8)
+    from anchorgate.references import climatology_table
+
+    def lag1_corr(o):
+        a = o.series - climatology_table(o)[o.calendar - 1]
+        a = a[: o.cutoff]
+        return np.corrcoef(a[1:].ravel(), a[:-1].ravel())[0, 1]
+
+    assert lag1_corr(red) > 0.5 > lag1_corr(white) + 0.3

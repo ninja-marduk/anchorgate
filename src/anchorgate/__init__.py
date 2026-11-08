@@ -50,7 +50,12 @@ from .folds import (
     shuffled_kfold,
 )
 from .fusion import decompose_fusion, fusion_ladder, resolve_assignment
-from .references import build_references, climatology_table, training_terciles
+from .references import (
+    build_references,
+    climatology_table,
+    reference_forecast,
+    training_terciles,
+)
 from .report import render_markdown, to_json, write_report
 from .result import Result, Verdict
 from .spatial import (
@@ -111,6 +116,7 @@ __all__ = [
     "purged_holdout",
     "quick_anchor",
     "rcbd_anova",
+    "reference_forecast",
     "released_scalar_shuffle",
     "render_markdown",
     "resolve_assignment",

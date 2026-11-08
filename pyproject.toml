@@ -39,6 +39,8 @@ dependencies = [
 [project.optional-dependencies]
 io = ["netCDF4>=1.6"]
 plots = ["matplotlib>=3.7"]
+remote = ["fsspec>=2023.1", "aiohttp>=3.8", "h5netcdf>=1.1"]
+docs = ["mkdocs-material>=9.5", "mkdocstrings[python]>=0.24"]
 dev = [
   "pytest>=7.4",
   "pytest-cov>=4.1",
