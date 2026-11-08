@@ -108,9 +108,13 @@ def test_cli_factorial_fusion_and_run(obs, tmp_path, capsys):
     assert "C3 fusion decomposition" in capsys.readouterr().out
     assert main(["fusion", str(p), "--assignment", "shuffled"]) == 0
     assert "not out of sample" in capsys.readouterr().out
+    assert main(["anomaly", str(p), "--conformal"]) == 0
+    assert "C4 anomaly skill" in capsys.readouterr().out
+    assert main(["spatial", str(p), "--leakage"]) == 0
+    assert "C5 spatial diagnostics" in capsys.readouterr().out
     assert main(["run", str(p), "--out", str(tmp_path / "all")]) == 0
     js = json.loads((tmp_path / "all" / "report.json").read_text(encoding="utf-8"))
     components = [r["component"][:2] for r in js["results"]]
-    assert components == ["C0", "C1", "C2", "C3"]
+    assert components == ["C0", "C1", "C2", "C3", "C4", "C5"]
     md = (tmp_path / "all" / "report.md").read_text(encoding="utf-8")
     assert "### contrasts" in md and "### summary" in md

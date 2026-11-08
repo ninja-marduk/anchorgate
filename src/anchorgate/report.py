@@ -37,6 +37,19 @@ INTEGER_COLUMNS = {
     "n_units",
     "k",
     "n_effective",
+    "cell",
+    "n_nodes",
+    "n_edges",
+    "isolated_nodes",
+    "n_calibration",
+    "n_test",
+    "n_cells_sampled",
+    "n_steps_full",
+    "n_steps_training",
+    "edges_full",
+    "edges_training",
+    "edges_only_with_held_out",
+    "edges_lost_without_held_out",
 }
 
 

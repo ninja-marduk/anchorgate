@@ -1,4 +1,7 @@
-"""Command line interface: ``anchorgate validate | audit | anchor | factorial | fusion | run``."""
+"""Command line interface.
+
+``anchorgate validate | audit | anchor | factorial | fusion | anomaly | spatial | run``
+"""
 
 from __future__ import annotations
 
@@ -8,6 +11,7 @@ from pathlib import Path
 
 from . import __version__
 from .anchor import anchor
+from .anomaly import anomaly_skill
 from .data import Benchmark, benchmark_from_declaration
 from .declaration import Declaration
 from .factorial import factorial
@@ -23,6 +27,7 @@ from .folds import (
 from .fusion import decompose_fusion, resolve_assignment
 from .report import write_report
 from .result import Result
+from .spatial import spatial_from_declaration
 
 
 def _load(decl_path: str) -> tuple[Declaration, Benchmark]:
@@ -127,6 +132,21 @@ def cmd_fusion(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_anomaly(args: argparse.Namespace) -> int:
+    decl, bench = _load(args.declaration)
+    res = anomaly_skill(bench, decl, mask=args.mask, conformal=args.conformal)
+    _finish([res], bench, decl, args.out)
+    return 0
+
+
+def cmd_spatial(args: argparse.Namespace) -> int:
+    decl, bench = _load(args.declaration)
+    root = Path(args.declaration).resolve().parent
+    res = spatial_from_declaration(bench, decl, root, mask=args.mask, leakage=args.leakage)
+    _finish([res], bench, decl, args.out)
+    return 0
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     """Every component the declaration supports, one report."""
     decl, bench = _load(args.declaration)
@@ -149,6 +169,11 @@ def cmd_run(args: argparse.Namespace) -> int:
                 validate=False,
             )
         )
+    results.append(
+        anomaly_skill(bench, decl, mask=args.mask, conformal=args.conformal, validate=False)
+    )
+    root = Path(args.declaration).resolve().parent
+    results.append(spatial_from_declaration(bench, decl, root, mask=args.mask, validate=False))
     _finish(results, bench, decl, args.out)
     return 0 if all(r.verdict.value != "FAIL" for r in results[:1]) else 1
 
@@ -204,11 +229,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.set_defaults(func=cmd_fusion)
 
+    p = sub.add_parser("anomaly", help="component 4: skill on deseasonalised anomalies")
+    p.add_argument("declaration")
+    p.add_argument("--out", default=None)
+    p.add_argument("--mask", default=None)
+    p.add_argument("--conformal", action="store_true", help="add conformal intervals by origin")
+    p.set_defaults(func=cmd_anomaly)
+
+    p = sub.add_parser("spatial", help="component 5: winners, strata, collapse, graph")
+    p.add_argument("declaration")
+    p.add_argument("--out", default=None)
+    p.add_argument("--mask", default=None)
+    p.add_argument("--leakage", action="store_true", help="audit the correlation-term leakage")
+    p.set_defaults(func=cmd_spatial)
+
     p = sub.add_parser("run", help="every component the declaration supports")
     p.add_argument("declaration")
     p.add_argument("--out", default=None)
     p.add_argument("--mask", default=None)
     p.add_argument("--categorical", action="store_true")
+    p.add_argument("--conformal", action="store_true")
     p.set_defaults(func=cmd_run)
 
     args = ap.parse_args(argv)

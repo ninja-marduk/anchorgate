@@ -28,6 +28,14 @@ Keep a Changelog, and the project follows semantic versioning. The protocol itse
   combination on any fold assignment, the best base learner chosen on the fit origins,
   oracle picks as the selection advantage, the in-sample gap, a supplied ensemble scored
   for reference, and the ladder of rungs scored on the same origins.
-- Declaration sections `contrasts`, `factorial` and `fusion`.
+- Component 4, anomaly skill: per-cell temporal and per-origin pattern anomaly
+  correlations against the training climatology, the pooled correlation as the inflated
+  comparison, anomaly R2 and standard-deviation ratio, MSESS, and split-conformal
+  intervals by origin truncated at zero with conditional coverage by stratum.
+- Component 5, spatial diagnostics: per-cell winner map, skill by strata, collapse
+  diagnostic (mean-field correlation, s.d. ratio, variance explained by the cell mean),
+  graph audit of an adjacency (edge length, elevation contrast, degree) and the
+  training-only versus full-record correlation leakage.
+- Declaration sections `contrasts`, `factorial`, `fusion` and `strata`.
 - Markdown and JSON reports; command line interface (`validate`, `audit`, `anchor`,
-  `factorial`, `fusion`, `run`).
+  `factorial`, `fusion`, `anomaly`, `spatial`, `run`).

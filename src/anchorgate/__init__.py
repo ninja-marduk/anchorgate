@@ -11,6 +11,7 @@ from __future__ import annotations
 __version__ = "0.1.0"
 
 from .anchor import anchor, gate_table, quick_anchor
+from .anomaly import anomaly_scores, anomaly_skill, conformal_by_origin, pattern_acc, temporal_acc
 from .data import (
     Benchmark,
     Forecast,
@@ -52,6 +53,17 @@ from .fusion import decompose_fusion, fusion_ladder, resolve_assignment
 from .references import build_references, climatology_table, training_terciles
 from .report import render_markdown, to_json, write_report
 from .result import Result, Verdict
+from .spatial import (
+    collapse_diagnostic,
+    correlation_leakage,
+    graph_audit,
+    skill_by_strata,
+    spatial_diagnostics,
+    spatial_from_declaration,
+    strata_bands,
+    strata_from_declaration,
+    winner_map,
+)
 
 __all__ = [
     "Benchmark",
@@ -64,12 +76,17 @@ __all__ = [
     "Verdict",
     "__version__",
     "anchor",
+    "anomaly_scores",
+    "anomaly_skill",
     "audit",
     "benchmark_from_declaration",
     "build_references",
     "cliffs_delta",
     "climatology_table",
+    "collapse_diagnostic",
+    "conformal_by_origin",
     "contiguous_kfold",
+    "correlation_leakage",
     "decompose_fusion",
     "effective_units",
     "factorial",
@@ -78,6 +95,7 @@ __all__ = [
     "from_arrays",
     "fusion_ladder",
     "gate_table",
+    "graph_audit",
     "group_contrasts",
     "holm",
     "infer_origin_time",
@@ -88,6 +106,7 @@ __all__ = [
     "nemenyi_cd",
     "overlap",
     "paired_contrasts",
+    "pattern_acc",
     "permutation_test",
     "purged_holdout",
     "quick_anchor",
@@ -98,7 +117,14 @@ __all__ = [
     "responses",
     "scalar_shuffle_overlap",
     "shuffled_kfold",
+    "skill_by_strata",
+    "spatial_diagnostics",
+    "spatial_from_declaration",
+    "strata_bands",
+    "strata_from_declaration",
+    "temporal_acc",
     "to_json",
     "training_terciles",
+    "winner_map",
     "write_report",
 ]

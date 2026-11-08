@@ -16,7 +16,9 @@ from anchorgate import (
     Benchmark,
     Observations,
     anchor,
+    anomaly_skill,
     audit,
+    correlation_leakage,
     decompose_fusion,
     factorial,
     forecasts_from_directory,
@@ -24,6 +26,8 @@ from anchorgate import (
     group_contrasts,
     holm,
     ladder,
+    spatial_diagnostics,
+    strata_bands,
 )
 
 ROOT = os.environ.get("ANCHORGATE_THESIS_ROOT")
@@ -223,3 +227,86 @@ def test_fusion_decomposition_on_the_purged_block(boyaca):
     assert rungs.loc["shuffled", "fusion"] == pytest.approx(0.665, abs=0.01)
     assert rungs.loc["released", "fusion"] == pytest.approx(0.668, abs=0.02)
     assert (rungs.drop("purged")["verdict"] == "INSUFFICIENT").all()
+
+
+@pytest.fixture(scope="module")
+def seed42() -> Benchmark:
+    """Single seed-42 runs plus the collapsed pure spectral model, all 33 origins."""
+    obs = _observations()
+    out = Path(ROOT or ".") / "models" / "output"
+    fcs = forecasts_from_directory(
+        out / "V4_GNN_TAT_Models/SEED42/map_exports/H12/BASIC/GNN_TAT_GAT/predictions.npy",
+        obs,
+        model="GNN-TAT-GAT",
+        features="BASIC",
+    )
+    fcs += forecasts_from_directory(
+        out / "V10_Late_Fusion/SEED42/predictions.npy", obs, model="Late Fusion", features="BASIC"
+    )
+    fcs += forecasts_from_directory(
+        out / "V3_FNO_Models/map_exports/H12/BASIC/FNO_Pure/predictions.npy",
+        obs,
+        model="FNO",
+        features="BASIC",
+    )
+    bench = Benchmark(fcs, obs)
+    bench.validate(atol=1e-3)
+    return bench
+
+
+def test_anomaly_skill_reproduces_the_corrected_definitions(seed42):
+    res = anomaly_skill(seed42, conformal=True, n_calibration=16, validate=False)
+    bl = res.tables["by_lead"].set_index(["label", "lead"])
+    gnn = "GNN-TAT-GAT[BASIC] seed 42"
+    lf = "Late Fusion[BASIC] seed 42"
+    assert bl.loc[(gnn, 1), "acc_cell_mean"] == pytest.approx(-0.076, abs=0.001)
+    assert bl.loc[(gnn, 1), "cells_positive"] == pytest.approx(0.294, abs=0.001)
+    assert bl.loc[(gnn, 1), "acc_pattern"] == pytest.approx(0.149, abs=0.001)
+    assert bl.loc[(gnn, 1), "acc_pooled"] == pytest.approx(0.059, abs=0.001)
+    assert bl.loc[(gnn, 12), "acc_cell_mean"] == pytest.approx(-0.122, abs=0.001)
+    assert bl.loc[(lf, 1), "acc_cell_mean"] == pytest.approx(0.028, abs=0.001)
+    assert bl.loc[(lf, 1), "cells_positive"] == pytest.approx(0.573, abs=0.001)
+    assert bl.loc[(lf, 1), "acc_pooled"] == pytest.approx(0.148, abs=0.001)
+    assert bl.loc[(lf, 12), "acc_pattern"] == pytest.approx(0.138, abs=0.001)
+    conf = res.tables["conformal_summary"].set_index("label")
+    assert conf.loc[lf, "coverage"] == pytest.approx(0.999, abs=0.001)
+    assert conf.loc[lf, "width"] == pytest.approx(496.4, abs=0.1)
+    assert conf.loc["climatology", "coverage"] == pytest.approx(1.000, abs=0.001)
+    assert conf.loc["climatology", "width"] == pytest.approx(471.6, abs=0.1)
+    assert res.verdict.value == "INSUFFICIENT"  # single runs cannot pass
+
+
+def test_spatial_diagnostics_reproduce_collapse_and_strata(seed42):
+    import xarray as xr
+
+    root = Path(ROOT or ".")
+    with xr.open_dataset(root / DATASET) as ds:
+        elev = ds["elevation"].values
+    elev = elev[0] if elev.ndim == 3 else elev
+    labels = strata_bands(elev.ravel(), [1500, 2800], ["low", "mid", "high"])
+    counts = {k: int((labels == k).sum()) for k in ("low", "mid", "high")}
+    assert counts == {"low": 2467, "mid": 941, "high": 557}
+    res = spatial_diagnostics(seed42, strata={"elevation": labels}, validate=False)
+    c = res.tables["collapse"].set_index("label")
+    for label, r2, corr, ratio in (
+        ("GNN-TAT-GAT[BASIC] seed 42", 0.389, 0.928, 0.337),
+        ("Late Fusion[BASIC] seed 42", 0.672, 0.968, 0.696),
+        ("FNO[BASIC] (single run)", 0.176, 0.958, 0.133),
+        ("cell_mean", 0.208, 0.964, 0.000),
+        ("climatology", 0.730, 0.963, 0.731),
+    ):
+        assert c.loc[label, "pooled_r2"] == pytest.approx(r2, abs=0.001)
+        assert c.loc[label, "mean_field_corr"] == pytest.approx(corr, abs=0.001)
+        assert c.loc[label, "sd_ratio"] == pytest.approx(ratio, abs=0.001)
+    assert any("collapsed" in n and "FNO" in n for n in res.notes)
+    share = res.values.set_index("arm")["share"]
+    assert share["climatology"] > 0.8
+    assert res.verdict.value == "FAIL"
+    strata = res.tables["strata_elevation"]
+    assert strata[strata["arm"] == "climatology"]["n_cells"].tolist() == [2467, 941, 557]
+
+
+def test_correlation_leakage_reproduces_the_edge_counts(seed42):
+    t = correlation_leakage(seed42.observations).iloc[0]
+    assert t["edges_full"] == 998715
+    assert t["disagreement_share"] == pytest.approx(0.0093, abs=0.0002)
