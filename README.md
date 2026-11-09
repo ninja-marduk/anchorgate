@@ -39,9 +39,11 @@ times) and answers, with a verdict and the rule that produced it:
   of a graph model's adjacency, including whether its correlation term saw the evaluation
   period (component 5).
 
-Every report carries the SHA-256 of a **declaration** written before scoring: which
-origins are scored, which references, which gate, how many seeds, and what will be
-concluded on PASS and on FAIL.
+A **declaration** fixes the design of the evaluation: which origins are scored, which
+references, which gate, how many seeds, which contrasts form the family, and what will be
+concluded on PASS and on FAIL. Every component reads its choices from it, records the
+parameters it used and lists any choice overridden at call time; the report identifies the
+design by its hash.
 
 ## Install
 

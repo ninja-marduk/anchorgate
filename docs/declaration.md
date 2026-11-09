@@ -1,6 +1,6 @@
 # The declaration
 
-A YAML file written before scoring. It says which origins are scored, which references
+A YAML file that fixes the design of the evaluation. It says which origins are scored, which references
 are built, what the gate is, how many seeds are expected, which contrasts form the
 family, which strata are reported and what will be concluded on PASS and on FAIL. The
 package hashes the file's bytes and prints the hash in every report, so a declaration

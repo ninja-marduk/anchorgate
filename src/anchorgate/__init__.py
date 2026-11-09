@@ -2,8 +2,9 @@
 
 Saved predictions of any model are scored against untrained references on identical
 targets, fold assignments are audited for target-period overlap, seed variance is
-resolved before any architectural claim, and every report carries the hash of a
-declaration written before scoring.
+resolved before any architectural claim, verdicts are read from block-bootstrap
+intervals, and every component reports its parameters and deviations against a
+declared evaluation design.
 """
 
 from __future__ import annotations

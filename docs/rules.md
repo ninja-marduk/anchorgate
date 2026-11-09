@@ -80,6 +80,7 @@ period) are reported alongside.
 
 ## The declaration
 
-Every verdict above is computed under a declaration written before scoring, and every
-report prints its hash. A declaration edited after scoring produces a visibly different
-report. See [the declaration](declaration.md).
+Every verdict above is computed under a declaration that fixes the design of the
+evaluation. Each component reads its choices from it, records the parameters it used and
+lists any choice overridden at call time; the report prints the design hash and those
+deviations, so a run can be read against the design it claims to follow. See [the declaration](declaration.md).

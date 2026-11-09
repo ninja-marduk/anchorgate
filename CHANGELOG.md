@@ -18,6 +18,8 @@ Keep a Changelog, and the project follows semantic versioning. The protocol itse
 - Component 1, anchoring: pooled R2, per-cell NSE, MSESS, RMSE, MAE, bias, by lead and
   inside a mask; tercile categorical scores; the gate on the seed mean of MSESS.
 - Declaration file with SHA-256 hash carried into every result.
+- Citation metadata (`CITATION.cff`, `.zenodo.json`) naming the four authors of the
+  accompanying manuscript.
 - Component 2, seed-resolved factorial: responses per run (lead mean, lead peak or
   pooled), randomised complete block ANOVA with the seed as block, within-block
   permutation test, paired contrasts with Holm correction over a declared family and

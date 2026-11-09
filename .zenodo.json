@@ -1,0 +1,49 @@
+{
+  "title": "anchorgate: an evaluation protocol with a gate for spatiotemporal predictions",
+  "upload_type": "software",
+  "license": "MIT",
+  "access_right": "open",
+  "creators": [
+    {
+      "name": "Pérez Reyes, Manuel Ricardo",
+      "affiliation": "Universidad Pedagógica y Tecnológica de Colombia (UPTC), GALASH Research Group",
+      "orcid": "0009-0003-2963-1631"
+    },
+    {
+      "name": "Suárez Barón, Marco Javier",
+      "affiliation": "Universidad Pedagógica y Tecnológica de Colombia (UPTC), GALASH Research Group"
+    },
+    {
+      "name": "García Cabrejo, Óscar Javier",
+      "affiliation": "Universidad Pedagógica y Tecnológica de Colombia (UPTC), GALASH Research Group"
+    },
+    {
+      "name": "Castillo-Reyes, Octavio",
+      "affiliation": "Universitat Politècnica de Catalunya (UPC) and Barcelona Supercomputing Center (BSC-CNS)"
+    }
+  ],
+  "description": "<p>anchorgate scores saved predictions of a spatiotemporal field against untrained references (per-cell climatology, persistence, seasonal naive) on identical targets, audits whether a cross-validation assignment is out of sample given the forecast horizon, resolves seed variance before any architectural claim, reads its verdicts from block-bootstrap intervals and refuses conclusions the computations do not support. A declaration fixes the design of the evaluation; every result records the parameters it used and any departure from it, and the report identifies the design by its hash.</p>",
+  "keywords": [
+    "forecast verification",
+    "model evaluation",
+    "climatology baseline",
+    "seed variance",
+    "cross-validation leakage",
+    "precipitation",
+    "spatiotemporal prediction"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/ninja-marduk/anchorgate",
+      "relation": "isSupplementTo",
+      "resource_type": "software",
+      "scheme": "url"
+    },
+    {
+      "identifier": "10.5281/zenodo.21576207",
+      "relation": "isDerivedFrom",
+      "resource_type": "dataset",
+      "scheme": "doi"
+    }
+  ]
+}
