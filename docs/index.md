@@ -15,8 +15,9 @@ rule that produced it:
 | C4 anomaly skill | Is there skill once the seasonal cycle is removed? | PASS when the per-cell temporal anomaly correlation and the MSESS are both positive |
 | C5 spatial diagnostics | Where on the map does the model win? | PASS when one configuration has the lowest error in a majority of cells and in more cells than every reference |
 
-Every report carries the SHA-256 of a [declaration](declaration.md) written before
-scoring. The [rules](rules.md) page states each conclusion rule in one sentence.
+A [declaration](declaration.md) fixes the design of the evaluation; every component reads its
+choices from it, records the parameters it used and lists any choice overridden at call time,
+and the report identifies the design by its hash.
 
 ## Install
 

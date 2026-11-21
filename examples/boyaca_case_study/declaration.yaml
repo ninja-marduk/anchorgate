@@ -1,6 +1,6 @@
-# Pre-registered declaration for the Boyaca monthly precipitation benchmark.
-# {thesis_root} is filled by run.py with the deposit location; everything else is fixed
-# before scoring, and the SHA-256 of this file is printed in every report.
+# Declared design of the evaluation of the Boyaca monthly precipitation benchmark.
+# {thesis_root} is filled by run.py with the deposit location; every other choice is
+# read by the components from this file, and the report lists any deviation from it.
 name: boyaca-monthly-precipitation
 data:
   observations:
