@@ -17,7 +17,7 @@ rule that produced it:
 
 A [declaration](declaration.md) fixes the design of the evaluation; every component reads its
 choices from it, records the parameters it used and lists any choice overridden at call time,
-and the report identifies the design by its hash.
+and the report identifies the design by its hash. The [rules](rules.md) page states each conclusion rule in one sentence.
 
 ## Install
 
