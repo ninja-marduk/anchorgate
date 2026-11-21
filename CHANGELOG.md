@@ -6,6 +6,10 @@ Keep a Changelog, and the project follows semantic versioning. The protocol itse
 
 ## [Unreleased]
 
+### Fixed
+- Type-checks under the numpy 2.5 stubs and mypy 2.4 that a fresh install resolves;
+  licence metadata follows PEP 639; ruff no longer reformats Markdown code blocks.
+
 ### Added
 - Data contract: `Forecast`, `Observations`, `Benchmark` with validation of identical
   targets, target-observation consistency and training-period exclusion.

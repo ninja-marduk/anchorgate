@@ -61,7 +61,7 @@ def anchor(
         origins = decl.score_origins(n, horizon) if decl else np.arange(n)
     else:
         origins = np.asarray(sorted(int(o) for o in score_origins), dtype=int)
-    if origins.size == 0 or origins.min() < 0 or origins.max() >= n:
+    if origins.size == 0 or np.min(origins) < 0 or np.max(origins) >= n:
         raise ValueError(f"scored origins must lie in 0..{n - 1}")
     ref_names = (
         tuple(references)

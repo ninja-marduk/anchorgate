@@ -95,7 +95,7 @@ def strata_bands(
     if len(labels) != len(e) + 1:
         raise ValueError("labels must number one more than the edges")
     idx = np.digitize(v, e)
-    out = np.array([labels[i] for i in idx], dtype=object)
+    out = np.array([labels[int(i)] for i in idx], dtype=object)
     out[~np.isfinite(v)] = ""
     return out
 
@@ -329,7 +329,7 @@ def graph_audit(
         "n_edges": int(r.size),
         "degree_median": float(np.median(deg)),
         "degree_p95": float(np.percentile(deg, 95)),
-        "degree_max": float(deg.max()),
+        "degree_max": float(np.max(deg)),
         "isolated_nodes": int((deg == 0).sum()),
         "share_under_10km": float(np.mean(length < 10)),
         "share_under_25km": float(np.mean(length < 25)),
@@ -338,8 +338,9 @@ def graph_audit(
         "median_pair_distance_km": float(np.median(all_len)),
     }
     if w is not None and w.size == r.size:
+        total = float(np.sum(w))
         summary["weight_share_under_25km"] = (
-            float(w[length < 25].sum() / w.sum()) if w.sum() else np.nan
+            float(np.sum(w[length < 25])) / total if total else np.nan
         )
     out = {"summary": pd.DataFrame([summary]), "length": length_tab}
     if elevation is not None:
