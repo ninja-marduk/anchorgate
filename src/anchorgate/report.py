@@ -62,7 +62,11 @@ def _table(frame: pd.DataFrame, floatfmt: str = "{:.3f}", max_rows: int = 60) ->
             finite = df[c].dropna()
             integral = len(finite) > 0 and bool(np.all(np.mod(finite.to_numpy(), 1) == 0))
             fmt = "{:.0f}" if integral and str(c) in INTEGER_COLUMNS else floatfmt
-            df[c] = df[c].map(lambda v, fmt=fmt: "" if pd.isna(v) else fmt.format(v))
+
+            def _cell(v: float, fmt: str = fmt) -> str:
+                return "" if pd.isna(v) else fmt.format(v)
+
+            df[c] = df[c].map(_cell)
     cols = [str(c) for c in df.columns]
     lines = ["| " + " | ".join(cols) + " |", "| " + " | ".join("---" for _ in cols) + " |"]
     for _, row in df.iterrows():

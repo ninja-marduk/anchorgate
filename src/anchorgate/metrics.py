@@ -59,8 +59,8 @@ def per_cell_nse(pred: np.ndarray, obs: np.ndarray) -> float:
     monthly climatology still scores above zero here through the seasonal cycle it
     carries. Only the deseasonalised anomaly test (component 4) removes that too.
     """
-    p = np.asarray(pred, dtype=np.float64).reshape(-1, np.shape(pred)[-1])
-    o = np.asarray(obs, dtype=np.float64).reshape(-1, np.shape(obs)[-1])
+    p: np.ndarray = np.asarray(pred, dtype=np.float64).reshape(-1, np.shape(pred)[-1])
+    o: np.ndarray = np.asarray(obs, dtype=np.float64).reshape(-1, np.shape(obs)[-1])
     m = np.isfinite(p) & np.isfinite(o)
     p = np.where(m, p, np.nan)
     o = np.where(m, o, np.nan)
