@@ -48,22 +48,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from anchorgate import (
-    Benchmark,
-    Declaration,
-    Forecast,
-    Observations,
-    anchor,
-    anomaly_skill,
-    audit,
-    decompose_fusion,
-    factorial,
-    purged_holdout,
-    shuffled_kfold,
-    spatial_diagnostics,
-    strata_bands,
-    write_report,
-)
+from anchorgate import Benchmark, Declaration, Forecast, Observations, write_report
 from anchorgate.result import Result
 from anchorgate.synthetic import origins_after_cutoff
 
@@ -73,9 +58,9 @@ LEADS = enso_ridge.LEADS
 SEEDS = enso_ridge.SEEDS
 CONFIGS = enso_ridge.CONFIGS
 TRAIN_FRACTION = eight_regimes.TRAIN_FRACTION
-BLOCK_ORIGINS = 12
-SHUFFLED_FOLDS = 5
-FOLD_SEED = 42
+BLOCK_ORIGINS = enso_ridge.BLOCK_ORIGINS
+SHUFFLED_FOLDS = enso_ridge.SHUFFLED_FOLDS
+FOLD_SEED = enso_ridge.FOLD_SEED
 DEFAULT_REGION = "mantaro"
 DEFAULT_CACHE = Path("data") / "local"
 IRI_URL = (
@@ -83,8 +68,8 @@ IRI_URL = (
     "/.precipitation/dods"
 )
 SOURCES = {"chc": eight_regimes.CHIRPS_URL, "iri": IRI_URL}
-FACTORIAL_PERMUTATIONS = 5000
-DESIGN_NAME = "enso-ridge-chirps-region"
+FACTORIAL_PERMUTATIONS = enso_ridge.FACTORIAL_PERMUTATIONS
+DESIGN_NAME = enso_ridge.DESIGN_NAME
 
 
 # ---------------------------------------------------------------------------- region
@@ -218,76 +203,24 @@ def declaration(
     n_origin: int,
     url: str = SOURCES["chc"],
 ) -> Declaration:
-    """The design, in memory: the same design hash for every region, the region and the
-    record in the ``data`` section."""
-    block = scored_block(n_origin)
-    doc = {
-        "name": DESIGN_NAME,
-        "data": {
-            "observations": {
-                "source": "CHIRPS v2.0 global monthly",
-                "url": url,
-                "region": name,
-                "regime": regime,
-                "box": {"lat": [box[0], box[1]], "lon": [box[2], box[3]]},
-                "record": f"{obs.time[0]}..{obs.time[-1]}",
-                "n_cells": obs.n_cell,
-                "cutoff": str(obs.time[obs.cutoff]),
-                "train_fraction": TRAIN_FRACTION,
-            },
-            "predictor": {"source": "NOAA PSL Nino 3.4 anomaly", "url": enso_ridge.NINO_URL},
-            "models": {
-                k: {
-                    "model": v["model"],
-                    "nino_lags": list(v["nino"]),
-                    "local_lags": list(v["local"]),
-                }
-                for k, v in CONFIGS.items()
-            },
-            "ridge_penalty": enso_ridge.RIDGE_PENALTY,
+    """The design, in memory: the same design hash for every region (and for the Boyaca
+    deposit of ``enso_ridge.py``), the region and the record in the ``data`` section."""
+    data = {
+        "observations": {
+            "source": "CHIRPS v2.0 global monthly",
+            "url": url,
+            "region": name,
+            "regime": regime,
+            "box": {"lat": [box[0], box[1]], "lon": [box[2], box[3]]},
+            "record": f"{obs.time[0]}..{obs.time[-1]}",
+            "n_cells": obs.n_cell,
+            "cutoff": str(obs.time[obs.cutoff]),
+            "train_fraction": TRAIN_FRACTION,
         },
-        "scoring": {"purged": {"start": block[0], "stop": block[-1] + 1}},
-        "references": ["climatology", "persistence", "seasonal_naive"],
-        "gate": {
-            "metric": "msess",
-            "reference": "climatology",
-            "threshold": 0.0,
-            "min_seeds": 2,
-            "level": 0.9,
-            "block": 3,
-            "n_boot": 1000,
-        },
-        "seeds_expected": len(SEEDS),
-        "folds": [
-            {"kind": "shuffled", "name": "shuffled", "k": SHUFFLED_FOLDS, "seed": FOLD_SEED},
-            {"kind": "purged", "name": "purged", "out_of_sample": True},
-        ],
-        "contrasts": [["ENSO_LOCAL", "ENSO_ONLY"]],
-        "factorial": {
-            "factors": ["features"],
-            "metric": "msess",
-            "aggregate": "lead_mean",
-            "n_perm": FACTORIAL_PERMUTATIONS,
-        },
-        "fusion": {
-            "base": [
-                {"model": "ridge", "features": "ENSO_ONLY"},
-                {"model": "ridge", "features": "ENSO_LOCAL"},
-            ],
-            "assignment": "purged",
-        },
-        "conclusions": {
-            "pass": (
-                "at least one ENSO-informed configuration carries information beyond the"
-                " per-cell climatology on the purged block of this region"
-            ),
-            "fail": (
-                "no configuration exceeds the per-cell climatology on the purged block of"
-                " this region; the Nino 3.4 index alone does not predict its monthly anomalies"
-            ),
-        },
+        "predictor": {"source": "NOAA PSL Nino 3.4 anomaly", "url": enso_ridge.NINO_URL},
+        **enso_ridge.models_section(),
     }
-    return Declaration.from_dict(doc)
+    return enso_ridge.ridge_declaration(data, scored_block(n_origin))
 
 
 def fit_runs(obs: Observations, nino: pd.Series, origins: np.ndarray) -> list[Forecast]:
@@ -300,24 +233,7 @@ def fit_runs(obs: Observations, nino: pd.Series, origins: np.ndarray) -> list[Fo
 
 def run_protocol(bench: Benchmark, decl: Declaration) -> list[Result]:
     """Components 0 to 5 on a validated benchmark, every choice read from the design."""
-    n = bench.n_origin
-    block = decl.score_origins(n, bench.horizon).tolist()
-    assignments = [
-        shuffled_kfold(n, k=SHUFFLED_FOLDS, seed=FOLD_SEED, name="shuffled"),
-        purged_holdout(n, bench.lead, block, name="purged"),
-    ]
-    obs = bench.observations
-    cell_mean = np.nanmean(obs.series[: obs.cutoff], axis=0)
-    wet_dry = strata_bands(cell_mean, [float(np.nanmedian(cell_mean))], ["dry", "wet"])
-    ridge_only = Benchmark([f for f in bench.forecasts if f.model == "ridge"], obs)
-    return [
-        audit(bench, assignments, out_of_sample=["purged"], declaration_hash=decl.sha256),
-        anchor(bench, decl, validate=False),
-        factorial(ridge_only, decl, validate=False),
-        decompose_fusion(bench, decl, assignment=assignments[1], validate=False),
-        anomaly_skill(bench, decl, validate=False),
-        spatial_diagnostics(bench, decl, strata={"wet_dry": wet_dry}, validate=False),
-    ]
+    return enso_ridge.run_protocol(bench, decl, shuffled_folds=SHUFFLED_FOLDS, fold_seed=FOLD_SEED)
 
 
 # ------------------------------------------------------------------------------ main

@@ -3,8 +3,8 @@
 The deep models of the case study never received an oceanic predictor, so their failure
 at the gate says nothing about what is predictable. This example gives three cheap
 statistical configurations the one predictor the region is known to respond to and runs
-them through component 1 (anchoring) and component 4 (anomaly skill) on the same purged
-block as the case study:
+them through every component of the protocol, under a declared design, on the same
+purged block as the case study:
 
 * ``ridge[ENSO_LOCAL]``: per-cell, per-lead ridge on the Nino 3.4 anomaly at the origin
   and at lags 1, 2 and 3 months, plus the local anomaly at the origin and one month before;
@@ -19,10 +19,23 @@ origins 21 to 32 are the block the case study scores; without the deposit arrays
 origins after the cutoff are used instead. The Nino 3.4 index is read from the NOAA PSL
 table (``nina34.anom.data``), downloaded on first use.
 
+The components run are C0 (target-period overlap of five shuffled folds against the
+purged block), C1 (anchoring to the per-cell climatology, persistence and seasonal naive
+with the default gate), C2 (the feature set, ``ENSO_ONLY`` against ``ENSO_LOCAL``, as the
+one factor with the seed as block), C3 (the two ridge feature sets as base learners of an
+affine fusion, out of fold), C4 (skill on anomalies against the training climatology) and
+C5 (per-cell winner map, wet and dry strata, collapse diagnostic). C1 is also reported on
+every deposit origin. When the deposited deep models are readable, C5 is run a second
+time with them added, so the winner map holds every arm of the case study at once.
+
     python examples/enso_ridge.py --thesis-root /path/to/deposit --out report/
 
 The root is also read from ``ANCHORGATE_THESIS_ROOT``. Nothing is tuned on the scored
-block: the ridge penalty and the lags are fixed before scoring.
+block: the ridge penalty and the lags are fixed before scoring. Besides the report, the
+directory receives ``winner_cells.csv`` (the C5 winner per cell, with coordinates),
+``winner_cells_with_deposit.csv`` when the deposit was read, and
+``cell_skill_enso_only.csv`` (the seed-mean per-cell skill score of the index ridge
+against the climatology over the block), from which a map can be drawn.
 """
 
 from __future__ import annotations
@@ -33,25 +46,39 @@ import re
 import time
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import xarray as xr
+import yaml
 
 from anchorgate import (
     Benchmark,
+    Declaration,
     Forecast,
     Gate,
     Observations,
     anchor,
     anomaly_skill,
+    audit,
+    decompose_fusion,
+    factorial,
+    purged_holdout,
+    shuffled_kfold,
+    spatial_diagnostics,
+    strata_bands,
     write_report,
 )
 from anchorgate._time import to_period
-from anchorgate.data import infer_origin_time
-from anchorgate.references import climatology_table
+from anchorgate.data import benchmark_from_declaration, infer_origin_time
+from anchorgate.references import build_references, climatology_table
+from anchorgate.result import Result
+from anchorgate.spatial import per_cell_mse
 from anchorgate.synthetic import origins_after_cutoff, targets_for
 
+HERE = Path(__file__).resolve().parent
+CASE_STUDY_DECLARATION = HERE / "boyaca_case_study" / "declaration.yaml"
 OBS_RELATIVE = (
     "data/output/complete_dataset_with_features_with_clusters_elevation_windows_imfs"
     "_with_onehot_elevation_clean.nc"
@@ -69,6 +96,13 @@ RIDGE_PENALTY = 10.0
 NINO_LAGS = (0, 1, 2, 3)
 LOCAL_LAGS = (0, 1)
 MISSING = -99.99
+# the design shared with ``enso_ridge_region.py``: one hash, several data sets
+DESIGN_NAME = "enso-ridge-chirps-region"
+BLOCK_ORIGINS = 12
+SHUFFLED_FOLDS = 5
+FOLD_SEED = 42
+FACTORIAL_PERMUTATIONS = 5000
+REFERENCES = ("climatology", "persistence", "seasonal_naive")
 
 CONFIGS: dict[str, dict[str, object]] = {
     "ENSO_LOCAL": {"model": "ridge", "nino": NINO_LAGS, "local": LOCAL_LAGS},
@@ -124,6 +158,15 @@ def deposit_origins(root: Path, obs: Observations) -> tuple[np.ndarray, str]:
         if np.all(idx >= 0):
             return idx, "deposit"
     return origins_after_cutoff(obs, LEADS), "origins_after_cutoff"
+
+
+def deposit_benchmark(root: Path) -> Benchmark:
+    """The three deposited configurations, read as the case study reads them."""
+    text = CASE_STUDY_DECLARATION.read_text(encoding="utf-8").replace(
+        "{thesis_root}", root.as_posix()
+    )
+    decl = Declaration.from_dict(yaml.safe_load(text))
+    return benchmark_from_declaration(decl.data, root=root)
 
 
 # ----------------------------------------------------------------------------- model
@@ -222,6 +265,148 @@ class Fitter:
         )
 
 
+# ------------------------------------------------------------------------- the design
+
+
+def ridge_declaration(data: dict[str, Any], block: list[int]) -> Declaration:
+    """The declared design of the ridge examples: every section but ``data`` is fixed, so
+    the Boyaca deposit and every CHIRPS region carry the same design hash."""
+    doc = {
+        "name": DESIGN_NAME,
+        "data": data,
+        "scoring": {"purged": {"start": block[0], "stop": block[-1] + 1}},
+        "references": list(REFERENCES),
+        "gate": {
+            "metric": "msess",
+            "reference": "climatology",
+            "threshold": 0.0,
+            "min_seeds": 2,
+            "level": 0.9,
+            "block": 3,
+            "n_boot": 1000,
+        },
+        "seeds_expected": len(SEEDS),
+        "folds": [
+            {"kind": "shuffled", "name": "shuffled", "k": SHUFFLED_FOLDS, "seed": FOLD_SEED},
+            {"kind": "purged", "name": "purged", "out_of_sample": True},
+        ],
+        "contrasts": [["ENSO_LOCAL", "ENSO_ONLY"]],
+        "factorial": {
+            "factors": ["features"],
+            "metric": "msess",
+            "aggregate": "lead_mean",
+            "n_perm": FACTORIAL_PERMUTATIONS,
+        },
+        "fusion": {
+            "base": [
+                {"model": "ridge", "features": "ENSO_ONLY"},
+                {"model": "ridge", "features": "ENSO_LOCAL"},
+            ],
+            "assignment": "purged",
+        },
+        "conclusions": {
+            "pass": (
+                "at least one ENSO-informed configuration carries information beyond the"
+                " per-cell climatology on the purged block of this region"
+            ),
+            "fail": (
+                "no configuration exceeds the per-cell climatology on the purged block of"
+                " this region; the Nino 3.4 index alone does not predict its monthly anomalies"
+            ),
+        },
+    }
+    return Declaration.from_dict(doc)
+
+
+def models_section() -> dict[str, Any]:
+    """The ``models`` and ``ridge_penalty`` entries of the ``data`` section."""
+    return {
+        "models": {
+            k: {
+                "model": v["model"],
+                "nino_lags": list(v["nino"]),  # type: ignore[call-overload]
+                "local_lags": list(v["local"]),  # type: ignore[call-overload]
+            }
+            for k, v in CONFIGS.items()
+        },
+        "ridge_penalty": RIDGE_PENALTY,
+    }
+
+
+def boyaca_declaration(root: Path, obs: Observations, source: str, n_origin: int) -> Declaration:
+    data: dict[str, Any] = {
+        "observations": {
+            "source": "CHIRPS v2.0 monthly, Boyaca deposit",
+            "path": OBS_RELATIVE,
+            "variable": OBS_VARIABLE,
+            "record": f"{obs.time[0]}..{obs.time[-1]}",
+            "n_cells": obs.n_cell,
+            "cutoff": CUTOFF,
+            "origin_grid": source,
+            "n_origins": n_origin,
+        },
+        "predictor": {"source": "NOAA PSL Nino 3.4 anomaly", "url": NINO_URL},
+        **models_section(),
+    }
+    return ridge_declaration(data, PURGED)
+
+
+def run_protocol(
+    bench: Benchmark,
+    decl: Declaration,
+    *,
+    shuffled_folds: int = SHUFFLED_FOLDS,
+    fold_seed: int = FOLD_SEED,
+) -> list[Result]:
+    """Components 0 to 5 on a validated benchmark, every choice read from the design."""
+    n = bench.n_origin
+    block = decl.score_origins(n, bench.horizon).tolist()
+    assignments = [
+        shuffled_kfold(n, k=shuffled_folds, seed=fold_seed, name="shuffled"),
+        purged_holdout(n, bench.lead, block, name="purged"),
+    ]
+    obs = bench.observations
+    cell_mean = np.nanmean(obs.series[: obs.cutoff], axis=0)
+    wet_dry = strata_bands(cell_mean, [float(np.nanmedian(cell_mean))], ["dry", "wet"])
+    ridge_only = Benchmark([f for f in bench.forecasts if f.model == "ridge"], obs)
+    return [
+        audit(bench, assignments, out_of_sample=["purged"], declaration_hash=decl.sha256),
+        anchor(bench, decl, validate=False),
+        factorial(ridge_only, decl, validate=False),
+        decompose_fusion(bench, decl, assignment=assignments[1], validate=False),
+        anomaly_skill(bench, decl, validate=False),
+        spatial_diagnostics(bench, decl, strata={"wet_dry": wet_dry}, validate=False),
+    ]
+
+
+def cell_skill_table(bench: Benchmark, block: list[int], features: str) -> pd.DataFrame:
+    """Seed-mean per-cell MSE of one configuration and of the climatology on the block, and
+    the per-cell skill score between them; one row per cell with its coordinates."""
+    runs = [f for f in bench.forecasts if f.model == "ridge" and f.features == features]
+    if not runs:
+        raise ValueError(f"no ridge run with features {features}")
+    origins = np.asarray(block)
+    target = bench.target[origins]
+    mse_model = np.mean([per_cell_mse(f.pred[origins], target) for f in runs], axis=0)
+    refs = build_references(bench.observations, bench.origin_period, bench.lead, ("climatology",))
+    mse_clim = per_cell_mse(refs["climatology"][origins], target)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        skill = 1.0 - mse_model / mse_clim
+    obs = bench.observations
+    table = pd.DataFrame(
+        {
+            "cell": np.arange(obs.n_cell),
+            "mse_model": mse_model,
+            "mse_climatology": mse_clim,
+            "msess_cell": skill,
+        }
+    )
+    if obs.lat is not None and obs.lon is not None:
+        table["lat"] = obs.lat
+        table["lon"] = obs.lon
+    return table
+
+
 # ------------------------------------------------------------------------------ main
 
 
@@ -232,6 +417,11 @@ def main() -> int:
     ap.add_argument("--thesis-root", default=os.environ.get("ANCHORGATE_THESIS_ROOT"))
     ap.add_argument("--nino", default=None, help="local copy of the PSL nina34.anom.data table")
     ap.add_argument("--out", default="report_enso", help="directory for the reports")
+    ap.add_argument(
+        "--no-deposit",
+        action="store_true",
+        help="skip the second winner map that adds the deposited deep models",
+    )
     args = ap.parse_args()
     if not args.thesis_root:
         ap.error("--thesis-root or ANCHORGATE_THESIS_ROOT is required")
@@ -262,23 +452,47 @@ def main() -> int:
     bench = Benchmark(runs, obs)
     for note in bench.validate():
         print(f"note: {note}")
+    decl = boyaca_declaration(root, obs, source, origins.size)
+    print(f"declared design {decl.sha256[:12]}; scored block {PURGED[0]}..{PURGED[-1]}")
 
-    refs = ("climatology", "persistence", "seasonal_naive")
+    results = run_protocol(bench, decl)
     gate = Gate(metric="msess", reference="climatology", threshold=0.0, min_seeds=2)
-    results = [
-        anchor(bench, score_origins=PURGED, references=refs, gate=gate, validate=False),
-        anomaly_skill(bench, score_origins=PURGED, gate=gate, validate=False),
-        anchor(bench, references=refs, gate=gate, validate=False),
-    ]
-    results[2].title += " (every deposit origin)"
+    every = anchor(bench, references=REFERENCES, gate=gate, validate=False)
+    every.title += " (every deposit origin)"
+    results.append(every)
+
+    if not args.no_deposit:
+        try:
+            deposited = deposit_benchmark(root)
+            combined = Benchmark(runs + list(deposited.forecasts), obs)
+            for note in combined.validate():
+                print(f"note: {note}")
+            with_deposit = spatial_diagnostics(
+                combined, decl, references=REFERENCES, validate=False
+            )
+            with_deposit.title += " (ridge configurations and deposited models together)"
+            results.append(with_deposit)
+            with_deposit.tables["winner_cells"].to_csv(
+                out / "winner_cells_with_deposit.csv", index=False, lineterminator="\n"
+            )
+        except (OSError, ValueError, KeyError) as exc:
+            print(f"note: deposited models not added to the winner map ({exc})")
+
     for r in results:
         print(r.summary())
         for note in r.notes:
             print(f"  {note}")
-    lead_table = results[0].tables["by_lead_configuration"]
+    lead_table = results[1].tables["by_lead_configuration"]
     print("seed-mean MSESS by lead on the purged block, with the interval bounds:")
     print(lead_table.to_string(index=False, float_format=lambda v: f"{v:+.3f}"))
-    md, js = write_report(out, results, bench)
+
+    results[5].tables["winner_cells"].to_csv(
+        out / "winner_cells.csv", index=False, lineterminator="\n"
+    )
+    cell_skill_table(bench, PURGED, "ENSO_ONLY").to_csv(
+        out / "cell_skill_enso_only.csv", index=False, float_format="%.6f", lineterminator="\n"
+    )
+    md, js = write_report(out, results, bench, decl)
     print(f"report: {md} and {js} ({time.perf_counter() - t0:.0f} s)")
     return 0
 
