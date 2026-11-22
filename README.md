@@ -1,5 +1,7 @@
 # anchorgate
 
+[![ci](https://github.com/ninja-marduk/anchorgate/actions/workflows/ci.yml/badge.svg)](https://github.com/ninja-marduk/anchorgate/actions/workflows/ci.yml)
+
 An evaluation protocol with a gate for spatiotemporal predictions.
 
 `anchorgate` takes the saved predictions of any model of a gridded or station field
@@ -54,6 +56,16 @@ pip install -e ".[dev]"           # from a checkout
 
 Python 3.10 or later; `numpy`, `pandas`, `scipy`, `xarray`, `pyyaml`. NetCDF input
 needs `netCDF4`.
+
+`pyproject.toml` declares lower bounds; `uv.lock` pins the environment the package was
+developed and tested with. To install that exact set:
+
+```
+uv sync --locked --extra dev
+```
+
+The test step prints line coverage (`pytest --cov=anchorgate`); the continuous-integration
+matrix runs it on Linux and Windows under Python 3.10 to 3.13.
 
 ## Ten lines
 
