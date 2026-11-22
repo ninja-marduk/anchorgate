@@ -25,6 +25,8 @@ Thumbs.db
 # Local data and reports
 data/local/
 reports/
+report/
+report_*/
 *.nc
 !tests/data/*.nc
 

@@ -45,6 +45,10 @@ Keep a Changelog, and the project follows semantic versioning. The protocol itse
 - Declaration sections `contrasts`, `factorial`, `fusion` and `strata`.
 - Example `enso_ridge.py`: an ENSO-informed ridge and a damped-persistence baseline on the
   Boyaca deposit; `bring_your_own_model.py` takes `--ar`.
+- Example `enso_ridge_region.py`: the ENSO ridge and components 0 to 5 end to end on any CHIRPS
+  region read remotely (Mantaro, Peru by default; the CHC file or the IRI Data Library mirror),
+  with the regional cut cached locally and the design declared in memory; an offline test covers
+  its origin grid, scored block and run.
 - Verdicts read from intervals: components 1 and 4 draw a circular moving-block bootstrap
   over scored origins (gate fields `level`, `block`, `n_boot`), pass on the lower bound,
   fail on the upper bound and return INSUFFICIENT in between; component 1 reports the skill
@@ -55,5 +59,9 @@ Keep a Changelog, and the project follows semantic versioning. The protocol itse
 - Every result records the parameters it used and the deviations from the declaration; the
   declaration carries a file hash and a design hash (sections other than `data`), and the report
   prints the declared conclusions next to the verdicts.
+- Example `verdict_sensitivity.py`: the component-1 verdicts of the deposited and the
+  statistical configurations under a grid of gate constants (block length 1 to 6, level
+  0.80 to 0.95, threshold 0 to 0.05), with a CSV, a LaTeX table body and a test on the
+  synthetic benchmark.
 - Markdown and JSON reports; command line interface (`validate`, `audit`, `anchor`,
   `factorial`, `fusion`, `anomaly`, `spatial`, `run`).

@@ -151,6 +151,13 @@ Not a training framework: inputs are saved predictions.
 - `examples/enso_ridge.py`: a per-cell ridge on lagged Nino 3.4 (and a damped-persistence
   baseline) on the same deposit and purged block as the case study; the one configuration
   on this benchmark that clears the gate, with its skill horizon.
+- `examples/verdict_sensitivity.py`: the component-1 verdicts of the six configurations
+  above (three deposited, three statistical) recomputed on the purged block under a grid
+  of gate constants (block length, interval level, threshold); a CSV, a LaTeX table body
+  and a summary of which verdicts move.
+- `examples/enso_ridge_region.py`: the same ENSO ridge, components 0 to 5 end to end on any
+  CHIRPS region (Mantaro, Peru by default; `--region` takes a named region or a lat/lon box),
+  through a declared design whose hash is the same for every region (`anchorgate[remote]`).
 - `examples/boyaca_case_study/`: the published monthly precipitation benchmark over the
   Colombian Andes, run from its deposit through a declared design and checked
   against the published provenance numbers.

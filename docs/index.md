@@ -62,5 +62,8 @@ rules behind them, and the numbers.
 - `examples/enso_ridge.py`: a per-cell ridge on lagged Nino 3.4 (and a damped-persistence
   baseline) on the same deposit and purged block as the case study; the one configuration
   on this benchmark that clears the gate, with its skill horizon.
+- `examples/enso_ridge_region.py`: the same ENSO ridge, components 0 to 5 end to end on any
+  CHIRPS region (Mantaro, Peru by default; `--region` takes a named region or a lat/lon box),
+  through a declared design whose hash is the same for every region (`anchorgate[remote]`).
 - `examples/boyaca_case_study/`: the published monthly precipitation benchmark over the
   Colombian Andes, reproduced from its deposit and checked against the published numbers.
