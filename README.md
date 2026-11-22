@@ -185,7 +185,7 @@ planted overlap reports it; an ensemble whose gain is pure calibration decompose
 combination term of zero; a planted factor effect survives the blocked tests and a null
 design does not) and a regression suite against a published monthly precipitation
 benchmark over the Colombian Andes, enabled with
-`ANCHORGATE_THESIS_ROOT=<checkout of the case-study repository>`.
+`ANCHORGATE_THESIS_ROOT=<directory where the Zenodo deposit was unpacked, or a checkout of the case-study repository>`; the same variable fills the `{thesis_root}` placeholder of the case-study declaration, so `anchorgate run examples/boyaca_case_study/declaration.yaml` runs as printed.
 
 ## Licence
 

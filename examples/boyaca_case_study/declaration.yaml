@@ -1,5 +1,5 @@
 # Declared design of the evaluation of the Boyaca monthly precipitation benchmark.
-# {thesis_root} is filled by run.py with the deposit location; every other choice is
+# {thesis_root} is filled from ANCHORGATE_THESIS_ROOT (or by run.py); every other choice is
 # read by the components from this file, and the report lists any deviation from it.
 name: boyaca-monthly-precipitation
 data:
@@ -14,7 +14,7 @@ data:
     - {format: directory, pattern: "{thesis_root}/models/output/V10_Late_Fusion/SEED*/predictions.npy", model: Late-Fusion-released, features: BASIC}
 scoring: {purged: {start: 21, stop: 33}}       # the twelve origins whose targets run 2023-04 to 2025-02
 references: [climatology, persistence, seasonal_naive]
-gate: {metric: msess, reference: climatology, threshold: 0.0, min_seeds: 2}
+gate: {metric: msess, reference: climatology, threshold: 0.0, min_seeds: 2, level: 0.9, block: 3, n_boot: 1000}
 seeds_expected: 3
 folds:
   - {kind: released, name: released}

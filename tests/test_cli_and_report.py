@@ -129,3 +129,34 @@ def test_cli_factorial_fusion_and_run(obs, tmp_path, capsys):
     assert components == ["C0", "C1", "C2", "C3", "C4", "C5"]
     md = (tmp_path / "all" / "report.md").read_text(encoding="utf-8")
     assert "### contrasts" in md and "### summary" in md
+
+
+def test_relative_block_and_root_placeholder(tmp_path, monkeypatch):
+    from anchorgate import Declaration
+
+    d = Declaration.from_dict({"name": "x", "scoring": {"purged": {"last": 12}}})
+    assert d.score_origins(33, 12).tolist() == list(range(21, 33))
+    assert d.score_origins(99, 12).tolist() == list(range(87, 99))
+    same = Declaration.from_dict(
+        {"name": "x", "scoring": {"purged": {"last": 12}}, "data": {"a": 1}}
+    )
+    assert same.design_hash == d.design_hash
+    absolute = Declaration.from_dict(
+        {"name": "x", "scoring": {"purged": {"start": 21, "stop": 33}}}
+    )
+    assert absolute.design_hash != d.design_hash
+    p = tmp_path / "decl.yaml"
+    p.write_text(
+        "name: y\ndata: {observations: {path: '{thesis_root}/obs.nc'}}\n", encoding="utf-8"
+    )
+    monkeypatch.delenv("ANCHORGATE_THESIS_ROOT", raising=False)
+    try:
+        Declaration.load(p)
+    except ValueError as exc:
+        assert "ANCHORGATE_THESIS_ROOT" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("placeholder without the variable must fail")
+    monkeypatch.setenv("ANCHORGATE_THESIS_ROOT", str(tmp_path))
+    loaded = Declaration.load(p)
+    assert loaded.data["observations"]["path"].endswith("/obs.nc")
+    assert "{thesis_root}" not in loaded.data["observations"]["path"]

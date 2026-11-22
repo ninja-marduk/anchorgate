@@ -220,7 +220,7 @@ def declaration(
         "predictor": {"source": "NOAA PSL Nino 3.4 anomaly", "url": enso_ridge.NINO_URL},
         **enso_ridge.models_section(),
     }
-    return enso_ridge.ridge_declaration(data, scored_block(n_origin))
+    return enso_ridge.ridge_declaration(data)
 
 
 def fit_runs(obs: Observations, nino: pd.Series, origins: np.ndarray) -> list[Forecast]:
@@ -305,6 +305,7 @@ def main() -> int:
     for note in bench.validate():
         print(f"note: {note}")
     results = run_protocol(bench, decl)
+    results[1].notes.append(enso_ridge.nino_note(nino_path))
     for r in results:
         print(r.summary())
         for note in r.notes:

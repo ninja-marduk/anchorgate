@@ -647,6 +647,23 @@ def _same(a: np.ndarray, b: np.ndarray, atol: float) -> bool:
 # ------------------------------------------------------------------ declaration loader
 
 
+def _locate(path: Path) -> Path:
+    """Return ``path`` if it exists; otherwise the same file under the deposit's
+    ``notebooks/data/output`` layout or its ``data/output`` mirror, whichever exists."""
+    if path.exists():
+        return path
+    s = path.as_posix()
+    for old, new in (
+        ("/data/output/", "/notebooks/data/output/"),
+        ("/notebooks/data/output/", "/data/output/"),
+    ):
+        if old in s:
+            alt = Path(s.replace(old, new, 1))
+            if alt.exists():
+                return alt
+    return path
+
+
 def benchmark_from_declaration(decl_data: dict[str, Any], root: str | Path = ".") -> Benchmark:
     """Build a benchmark from the ``data`` section of a declaration.
 
@@ -664,9 +681,9 @@ def benchmark_from_declaration(decl_data: dict[str, Any], root: str | Path = "."
     o = decl_data.get("observations") or {}
     fmt = str(o.get("format", "netcdf"))
     if fmt == "netcdf":
-        obs = Observations.from_netcdf(root / o["path"])
+        obs = Observations.from_netcdf(_locate(root / o["path"]))
     elif fmt == "field":
-        with xr.open_dataset(root / o["path"]) as ds:
+        with xr.open_dataset(_locate(root / o["path"])) as ds:
             da = ds[o["variable"]].load()
         obs = Observations.from_field(da, o["cutoff"], time_dim=str(o.get("time_dim", "time")))
     else:

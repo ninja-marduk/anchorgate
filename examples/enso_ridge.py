@@ -26,7 +26,8 @@ one factor with the seed as block), C3 (the two ridge feature sets as base learn
 affine fusion, out of fold), C4 (skill on anomalies against the training climatology) and
 C5 (per-cell winner map, wet and dry strata, collapse diagnostic). C1 is also reported on
 every deposit origin. When the deposited deep models are readable, C5 is run a second
-time with them added, so the winner map holds every arm of the case study at once.
+time with the two trained models added (the released fusion is left out: its combiner was
+fitted on folds shuffled over the whole record, so it is in sample on the block).
 
     python examples/enso_ridge.py --thesis-root /path/to/deposit --out report/
 
@@ -41,6 +42,7 @@ against the climatology over the block), from which a map can be drawn.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import re
 import time
@@ -71,7 +73,7 @@ from anchorgate import (
     write_report,
 )
 from anchorgate._time import to_period
-from anchorgate.data import benchmark_from_declaration, infer_origin_time
+from anchorgate.data import _locate, benchmark_from_declaration, infer_origin_time
 from anchorgate.references import build_references, climatology_table
 from anchorgate.result import Result
 from anchorgate.spatial import per_cell_mse
@@ -144,7 +146,7 @@ def read_nino34(path: Path) -> pd.Series:
 
 
 def load_observations(root: Path) -> Observations:
-    with xr.open_dataset(root / OBS_RELATIVE) as ds:
+    with xr.open_dataset(_locate(root / OBS_RELATIVE)) as ds:
         da = ds[OBS_VARIABLE].load()
     return Observations.from_field(da, cutoff_time=np.datetime64(CUTOFF, "M"))
 
@@ -268,13 +270,14 @@ class Fitter:
 # ------------------------------------------------------------------------- the design
 
 
-def ridge_declaration(data: dict[str, Any], block: list[int]) -> Declaration:
-    """The declared design of the ridge examples: every section but ``data`` is fixed, so
-    the Boyaca deposit and every CHIRPS region carry the same design hash."""
+def ridge_declaration(data: dict[str, Any]) -> Declaration:
+    """The declared design of the ridge examples: every section but ``data`` is fixed and
+    the scored block is declared relative to the record (its last twelve origins), so the
+    Boyaca deposit and every CHIRPS region carry the same design hash."""
     doc = {
         "name": DESIGN_NAME,
         "data": data,
-        "scoring": {"purged": {"start": block[0], "stop": block[-1] + 1}},
+        "scoring": {"purged": {"last": BLOCK_ORIGINS}},
         "references": list(REFERENCES),
         "gate": {
             "metric": "msess",
@@ -333,7 +336,28 @@ def models_section() -> dict[str, Any]:
     }
 
 
-def boyaca_declaration(root: Path, obs: Observations, source: str, n_origin: int) -> Declaration:
+def nino_provenance(path: Path) -> dict[str, str]:
+    """SHA-256 and last month of the Nino 3.4 table actually used, for the data section
+    of the declaration and for a note in the report."""
+    series = read_nino34(path).dropna()
+    return {
+        "file_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "last_month": str(series.index[-1].date())[:7],
+    }
+
+
+def nino_note(path: Path) -> str:
+    prov = nino_provenance(path)
+    return (
+        f"Nino 3.4 table {path.name}: sha256 {prov['file_sha256'][:16]}, last month"
+        f" {prov['last_month']}; the index is revised with the sea-surface record, so the"
+        " ridge scores depend on this version"
+    )
+
+
+def boyaca_declaration(
+    root: Path, obs: Observations, source: str, n_origin: int, nino_path: Path
+) -> Declaration:
     data: dict[str, Any] = {
         "observations": {
             "source": "CHIRPS v2.0 monthly, Boyaca deposit",
@@ -345,10 +369,14 @@ def boyaca_declaration(root: Path, obs: Observations, source: str, n_origin: int
             "origin_grid": source,
             "n_origins": n_origin,
         },
-        "predictor": {"source": "NOAA PSL Nino 3.4 anomaly", "url": NINO_URL},
+        "predictor": {
+            "source": "NOAA PSL Nino 3.4 anomaly",
+            "url": NINO_URL,
+            **nino_provenance(nino_path),
+        },
         **models_section(),
     }
-    return ridge_declaration(data, PURGED)
+    return ridge_declaration(data)
 
 
 def run_protocol(
@@ -452,10 +480,11 @@ def main() -> int:
     bench = Benchmark(runs, obs)
     for note in bench.validate():
         print(f"note: {note}")
-    decl = boyaca_declaration(root, obs, source, origins.size)
+    decl = boyaca_declaration(root, obs, source, origins.size, nino_path)
     print(f"declared design {decl.sha256[:12]}; scored block {PURGED[0]}..{PURGED[-1]}")
 
     results = run_protocol(bench, decl)
+    results[1].notes.append(nino_note(nino_path))
     gate = Gate(metric="msess", reference="climatology", threshold=0.0, min_seeds=2)
     every = anchor(bench, references=REFERENCES, gate=gate, validate=False)
     every.title += " (every deposit origin)"
@@ -464,13 +493,18 @@ def main() -> int:
     if not args.no_deposit:
         try:
             deposited = deposit_benchmark(root)
-            combined = Benchmark(runs + list(deposited.forecasts), obs)
+            # the released fusion was fitted on folds shuffled over the whole record, so
+            # it is in sample on the block; the two trained models are out of sample
+            out_of_sample = [
+                f for f in deposited.forecasts if not f.model.startswith("Late-Fusion")
+            ]
+            combined = Benchmark(runs + out_of_sample, obs)
             for note in combined.validate():
                 print(f"note: {note}")
-            with_deposit = spatial_diagnostics(
-                combined, decl, references=REFERENCES, validate=False
+            with_deposit = spatial_diagnostics(combined, decl, validate=False)
+            with_deposit.title += (
+                " (ridge configurations and the two out-of-sample deposited models together)"
             )
-            with_deposit.title += " (ridge configurations and deposited models together)"
             results.append(with_deposit)
             with_deposit.tables["winner_cells"].to_csv(
                 out / "winner_cells_with_deposit.csv", index=False, lineterminator="\n"

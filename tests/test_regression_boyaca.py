@@ -1,6 +1,7 @@
 """Regression against the published Boyaca numbers.
 
-Runs only when ``ANCHORGATE_THESIS_ROOT`` points at a checkout of the case-study
+Runs only when ``ANCHORGATE_THESIS_ROOT`` points at the unpacked Zenodo deposit (or a
+checkout) of the case-study
 repository with its ``models/output`` arrays and the engineered dataset in place.
 """
 

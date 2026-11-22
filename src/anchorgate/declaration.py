@@ -12,6 +12,7 @@ same design on another machine or another dataset carries the same design hash.
 from __future__ import annotations
 
 import hashlib
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,22 @@ import numpy as np
 import yaml
 
 DEFAULT_REFERENCES = ("climatology", "persistence", "seasonal_naive")
+
+
+ROOT_PLACEHOLDER = "{thesis_root}"
+ROOT_VARIABLE = "ANCHORGATE_THESIS_ROOT"
+
+
+def _resolve_block(block: dict[str, Any], n_origin: int, where: str) -> np.ndarray:
+    """``{start, stop}`` (half-open) or ``{last: k}`` (the last ``k`` origins)."""
+    if "last" in block:
+        k = int(block["last"])
+        if k <= 0 or k > n_origin:
+            raise ValueError(f"{where}.last must be between 1 and {n_origin}, got {k}")
+        return np.arange(n_origin - k, n_origin)
+    if "start" not in block:
+        raise ValueError(f"{where} needs 'start' (and 'stop') or 'last'")
+    return np.arange(int(block["start"]), int(block.get("stop", n_origin)))
 
 
 @dataclass
@@ -88,7 +105,16 @@ class Declaration:
         """Load a YAML declaration; the file's bytes are what gets hashed."""
         p = Path(path)
         raw = p.read_bytes()
-        doc = yaml.safe_load(raw) or {}
+        text = raw.decode("utf-8")
+        if ROOT_PLACEHOLDER in text:
+            root = os.environ.get(ROOT_VARIABLE)
+            if not root:
+                raise ValueError(
+                    f"{p} contains the placeholder {ROOT_PLACEHOLDER}; set {ROOT_VARIABLE}"
+                    " to the directory that holds the deposit (or the case-study checkout)"
+                )
+            text = text.replace(ROOT_PLACEHOLDER, Path(root).resolve().as_posix())
+        doc = yaml.safe_load(text) or {}
         if not isinstance(doc, dict):
             raise ValueError(f"{p}: the declaration must be a mapping")
         d = cls.from_dict(doc)
@@ -138,19 +164,21 @@ class Declaration:
             scoring: {origins: all}
             scoring: {origins: [21, 22, 23]}
             scoring: {origins: {start: 21, stop: 33}}      # half-open, like Python
+            scoring: {origins: {last: 12}}                 # the last twelve origins
             scoring: {purged: {start: 21, stop: 33}}       # same, and C0 builds the fit set
+            scoring: {purged: {last: 12}}                  # relative, so the design hash
+                                                           # does not depend on the record length
         """
         spec = self.scoring
         if "purged" in spec:
-            block = spec["purged"]
-            return np.arange(int(block["start"]), int(block["stop"]))
+            return _resolve_block(dict(spec["purged"]), n_origin, "scoring.purged")
         origins = spec.get("origins", "all")
         if isinstance(origins, str):
             if origins != "all":
                 raise ValueError(f"unknown scoring.origins value {origins!r}")
             return np.arange(n_origin)
         if isinstance(origins, dict):
-            return np.arange(int(origins["start"]), int(origins.get("stop", n_origin)))
+            return _resolve_block(dict(origins), n_origin, "scoring.origins")
         return np.asarray(sorted(int(o) for o in origins), dtype=int)
 
     def describe(self) -> str:
