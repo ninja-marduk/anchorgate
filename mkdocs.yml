@@ -25,6 +25,7 @@ nav:
   - The rules: rules.md
   - The declaration: declaration.md
   - Tutorial, bring your own model: tutorial.md
+  - Continuous evaluation, what it would cost: continuous_evaluation.md
   - API reference: api.md
 
 plugins:
