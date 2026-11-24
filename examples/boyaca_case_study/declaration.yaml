@@ -14,7 +14,8 @@ data:
     - {format: directory, pattern: "{thesis_root}/models/output/V10_Late_Fusion/SEED*/predictions.npy", model: Late-Fusion-released, features: BASIC}
 scoring: {purged: {start: 21, stop: 33}}       # the twelve origins whose targets run 2023-04 to 2025-02
 references: [climatology, persistence, seasonal_naive]
-gate: {metric: msess, reference: climatology, threshold: 0.0, min_seeds: 2, level: 0.9, block: 3, n_boot: 1000}
+gate: {metric: msess, reference: climatology, threshold: 0.0,
+       min_seeds: 2, level: 0.9, block: 3, n_boot: 1000}
 seeds_expected: 3
 folds:
   - {kind: released, name: released}
