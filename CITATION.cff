@@ -3,7 +3,7 @@ message: "If you use this software, please cite it using the metadata below."
 type: software
 title: "anchorgate: an evaluation protocol with a gate for spatiotemporal predictions"
 version: 0.1.0
-date-released: 2026-11-09
+date-released: 2026-11-23
 license: MIT
 repository-code: "https://github.com/ninja-marduk/anchorgate"
 keywords:

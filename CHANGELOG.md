@@ -6,6 +6,28 @@ Keep a Changelog, and the project follows semantic versioning. The protocol itse
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.1.0] - 2026-11-23
+
+### Changed
+- The scored block of a declaration can be declared relative to the record
+  (`scoring: {purged: {last: 12}}`), so the same design carries the same design hash on
+  records of different length.
+- `Declaration.load` fills the `{thesis_root}` placeholder from `ANCHORGATE_THESIS_ROOT`,
+  so `anchorgate run examples/boyaca_case_study/declaration.yaml` runs as printed.
+- Observation files are found under both `data/output/` and the deposit's
+  `notebooks/data/output/` layout.
+- The case-study declaration states the gate's level, block length and resample count.
+- `uv.lock` pins the development environment; the package classifier is Beta.
+
+### Examples
+- `enso_ridge.py` runs the ENSO ridge through all six components on the deposit and writes
+  the per-cell winner and skill tables; `enso_ridge_region.py` runs the same design end
+  to end on CHIRPS regions read from the IRI mirror; `verdict_sensitivity.py` reruns
+  components 1 and 4 under a grid of gate constants and seed pairs.
+- `docs/continuous_evaluation.md` estimates what a monthly, continuous evaluation costs.
+
 ### Fixed
 - Type-checks under the numpy 2.5 stubs and mypy 2.4 that a fresh install resolves;
   licence metadata follows PEP 639; ruff no longer reformats Markdown code blocks.

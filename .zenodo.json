@@ -45,5 +45,7 @@
       "resource_type": "dataset",
       "scheme": "doi"
     }
-  ]
+  ],
+  "version": "0.1.0",
+  "publication_date": "2026-11-23"
 }
